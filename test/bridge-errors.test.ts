@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { userFacingMessageHandlingError } from "../src/bridge/errors.js";
+import { userFacingHttpError, userFacingMessageHandlingError } from "../src/bridge/errors.js";
 
 test("returns actionable guidance for the Windows sandbox launch failure", () => {
   const message = userFacingMessageHandlingError(
@@ -25,4 +25,11 @@ test("does not expose arbitrary local errors to WeChat", () => {
 
   assert.doesNotMatch(message, /private|token\.txt/);
   assert.match(message, /本机服务输出/);
+});
+
+test("does not expose arbitrary local errors over HTTP", () => {
+  const message = userFacingHttpError(new Error("Invalid JSON in C:/private/token.json"));
+
+  assert.doesNotMatch(message, /private|token\.json/);
+  assert.match(message, /Invalid request|Request failed/);
 });

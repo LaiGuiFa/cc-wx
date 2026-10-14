@@ -44,3 +44,16 @@
 3. 验证微信协议中 sync key 与跳过已拉取 batch 消息之间的确认语义。
 4. 补充 RuntimeState 跨字段一致性、坏账号隔离策略和 HTTP 错误脱敏的产品/运维决策。
 5. 评估账号别名规范化、session key 命名空间和关闭期只读 API 的低优先级建议。
+
+## 2026-10-14 当前安全审查批次
+
+审查文档：`docs/security-logic-review-2026-10-14.md`
+
+| 修复项 | 状态 | 复审 |
+| --- | --- | --- |
+| S1 用户可见错误分类和脱敏 | 已完成（静态） | `docs/repair-reviews/r8-current-security-fix-review-2026-10-14.md`：基本通过 |
+| S2 出站媒体大小和最终附件响应边界 | 已完成常规路径（静态） | `r8`：通过常规路径；保留本地 TOCTOU P2 |
+| S3 canonical account 门禁、session 状态键及历史读取 runner key | 已完成（静态） | `r8` 发现残余，`r9` 复审通过；历史读取 alias runner key 已补修 |
+| S4 微信 sync key/消息确认合同 | 未修改 | 需协议/运行验证，避免推测性改动 |
+
+本批次新增测试源码但未执行 `npm test`、typecheck、build、`npm audit` 或真实集成验证。未关闭的 P2/P3 风险继续留在后续验证队列，不得表述为运行验证通过。

@@ -9,6 +9,8 @@ import { promisify } from "node:util";
 import { z } from "zod";
 
 import { resolveCodexCommand } from "../codex/exec-runner.js";
+import { userFacingHttpError } from "../bridge/errors.js";
+import { DEFAULT_MAX_OUTBOUND_MEDIA_BYTES } from "../weixin/media.js";
 import { loadConfig, saveConfig } from "../state/config.js";
 import type { StatePaths } from "../state/paths.js";
 import type { CodexModelOption, CodexRuntimeInfo } from "../codex/app-server-runner.js";
@@ -78,7 +80,7 @@ export async function startLocalHttpServer(options: LocalHttpServerOptions): Pro
       port: actualPort
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
-      sendJson(response, errorStatus(message), { error: message });
+      sendJson(response, errorStatus(message), { error: userFacingHttpError(error) });
     });
   });
 
@@ -241,7 +243,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       response,
       attachment,
       url.searchParams.get("download") === "1",
-      method === "HEAD"
+      method === "HEAD",
+      Math.min(loadConfig(context.paths).maxInboundBytes, DEFAULT_MAX_OUTBOUND_MEDIA_BYTES)
     );
     return;
   }
@@ -271,7 +274,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       } catch (error) {
         await writeNdjson(response, {
           type: "error",
-          error: error instanceof Error ? error.message : String(error)
+          error: userFacingHttpError(error)
         });
       } finally {
         if (!response.writableEnded) response.end();
@@ -623,10 +626,11 @@ function serveSessionAttachment(
   response: ServerResponse,
   attachment: SessionAttachmentFile,
   download: boolean,
-  headOnly: boolean
+  headOnly: boolean,
+  maxBytes: number
 ): void {
   const stat = fs.statSync(attachment.path);
-  if (!stat.isFile()) {
+  if (!stat.isFile() || stat.size > maxBytes) {
     throw new Error("Session attachment not found");
   }
   const range = parseByteRange(request.headers.range, stat.size);
@@ -656,7 +660,7 @@ function serveSessionAttachment(
   const stream = fs.createReadStream(attachment.path, { start, end });
   stream.on("error", (error) => {
     if (!response.headersSent) {
-      sendJson(response, 500, { error: error.message });
+      sendJson(response, 500, { error: userFacingHttpError(error) });
     } else {
       response.destroy(error);
     }
@@ -712,6 +716,6 @@ export async function checkCodex(codexBin: string): Promise<{ ready: boolean; ve
     });
     return { ready: true, version: result.stdout.trim() || result.stderr.trim() || codexBin };
   } catch (error) {
-    return { ready: false, error: error instanceof Error ? error.message : String(error) };
+    return { ready: false, error: userFacingHttpError(error) };
   }
 }

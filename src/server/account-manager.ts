@@ -27,7 +27,12 @@ import {
 } from "../weixin/accounts.js";
 import { WeixinApiClient } from "../weixin/api.js";
 import { monitorWeixin, type MonitorOptions } from "../weixin/monitor.js";
-import { inferMediaKind, isAllowedLocalFile, sanitizeFileName } from "../weixin/media.js";
+import {
+  DEFAULT_MAX_OUTBOUND_MEDIA_BYTES,
+  inferMediaKind,
+  isAllowedLocalFile,
+  sanitizeFileName
+} from "../weixin/media.js";
 
 export type AccountRunStatus = "stopped" | "starting" | "running" | "error";
 
@@ -147,8 +152,8 @@ export class AccountManager {
   }
 
   async refreshAccount(accountId: string): Promise<AccountSummary> {
-    this.ensureAccountOpen(accountId);
     const account = loadAccount(this.options.paths, accountId);
+    this.ensureAccountOpen(account.accountId);
     const existing = this.entries.get(account.accountId);
     if (existing?.status === "running" || existing?.status === "starting") {
       await this.stopAccount(account.accountId, false);
@@ -157,8 +162,10 @@ export class AccountManager {
   }
 
   async startAccount(accountId: string, persist = true): Promise<AccountSummary> {
-    this.ensureAccountOpen(accountId);
-    const account = persist ? setAccountEnabled(this.options.paths, accountId, true) : loadAccount(this.options.paths, accountId);
+    const canonicalAccountId = this.ensureAccountOpen(accountId);
+    const account = persist
+      ? setAccountEnabled(this.options.paths, canonicalAccountId, true)
+      : loadAccount(this.options.paths, canonicalAccountId);
     const existing = this.entries.get(account.accountId);
     if (existing?.status === "running" || existing?.status === "starting") {
       return this.summary(account);
@@ -329,55 +336,56 @@ export class AccountManager {
   }
 
   createSession(accountId: string, senderId: string, workspace?: string, title?: string): AccountSession {
-    this.ensureAccountOpen(accountId);
+    const canonicalAccountId = this.ensureAccountOpen(accountId);
     const config = this.configProvider();
     const targetWorkspace = workspace ?? config.defaultCwd;
     if (!isWorkspaceAllowed(targetWorkspace, config.allowedWorkspaces)) {
       throw new Error(`Workspace is not allowed: ${targetWorkspace}`);
     }
-    const session = this.storeFor(accountId).createSession(senderId, targetWorkspace, title);
-    return this.sessionSummary(accountId, session, true);
+    const session = this.storeFor(canonicalAccountId).createSession(senderId, targetWorkspace, title);
+    return this.sessionSummary(canonicalAccountId, session, true);
   }
 
   renameSession(accountId: string, sessionId: string, title: string): AccountSession {
-    this.ensureAccountOpen(accountId);
-    const session = this.storeFor(accountId).renameSession(sessionId, title);
-    return this.sessionSummary(accountId, session, this.isActive(accountId, session.id));
+    const canonicalAccountId = this.ensureAccountOpen(accountId);
+    const session = this.storeFor(canonicalAccountId).renameSession(sessionId, title);
+    return this.sessionSummary(canonicalAccountId, session, this.isActive(canonicalAccountId, session.id));
   }
 
   updateSessionRuntime(accountId: string, sessionId: string, overrides: SessionRuntimeOverrides): AccountSession {
-    this.ensureAccountOpen(accountId);
-    const session = this.storeFor(accountId).updateSessionRuntime(sessionId, overrides);
-    return this.sessionSummary(accountId, session, this.isActive(accountId, session.id));
+    const canonicalAccountId = this.ensureAccountOpen(accountId);
+    const session = this.storeFor(canonicalAccountId).updateSessionRuntime(sessionId, overrides);
+    return this.sessionSummary(canonicalAccountId, session, this.isActive(canonicalAccountId, session.id));
   }
 
   isSessionStreamEnabled(accountId: string, sessionId: string): boolean {
-    const session = requireSession(this.storeFor(accountId), sessionId);
+    const canonicalAccountId = loadAccount(this.options.paths, accountId).accountId;
+    const session = requireSession(this.storeFor(canonicalAccountId), sessionId);
     return session.streamReplies ?? this.configProvider().streamReplies;
   }
 
   activateSession(accountId: string, sessionId: string): AccountSession {
-    this.ensureAccountOpen(accountId);
-    const session = this.storeFor(accountId).activateSession(sessionId);
-    return this.sessionSummary(accountId, session, true);
+    const canonicalAccountId = this.ensureAccountOpen(accountId);
+    const session = this.storeFor(canonicalAccountId).activateSession(sessionId);
+    return this.sessionSummary(canonicalAccountId, session, true);
   }
 
   resetSession(accountId: string, sessionId: string): AccountSession {
-    this.ensureAccountOpen(accountId);
+    const canonicalAccountId = this.ensureAccountOpen(accountId);
     if (this.turnCoordinator.isActive(sessionId)) {
       throw new Error("Session is responding; wait for the current task to finish before resetting");
     }
-    const session = this.storeFor(accountId).resetSession(sessionId);
-    return this.sessionSummary(accountId, session, this.isActive(accountId, session.id));
+    const session = this.storeFor(canonicalAccountId).resetSession(sessionId);
+    return this.sessionSummary(canonicalAccountId, session, this.isActive(canonicalAccountId, session.id));
   }
 
   deleteSession(accountId: string, sessionId: string): void {
-    this.ensureAccountOpen(accountId);
+    const canonicalAccountId = this.ensureAccountOpen(accountId);
     if (this.turnCoordinator.isActive(sessionId)) {
       throw new Error("Session is responding; wait for the current task to finish before deleting");
     }
-    this.storeFor(accountId).deleteSession(sessionId);
-    this.respondingSessions.delete(sessionRuntimeKey(accountId, sessionId));
+    this.storeFor(canonicalAccountId).deleteSession(sessionId);
+    this.respondingSessions.delete(sessionRuntimeKey(canonicalAccountId, sessionId));
   }
 
   async getSessionMessages(accountId: string, sessionId: string): Promise<SessionHistoryMessage[]> {
@@ -404,16 +412,17 @@ export class AccountManager {
   }
 
   private async readSessionMessages(accountId: string, sessionId: string): Promise<InternalSessionHistoryMessage[]> {
-    const store = this.storeFor(accountId);
+    const canonicalAccountId = loadAccount(this.options.paths, accountId).accountId;
+    const store = this.storeFor(canonicalAccountId);
     const session = requireSession(store, sessionId);
     if (!session.threadId) {
       return [];
     }
-    const history = await this.runnerForAccount(accountId).getHistory(session.threadId);
+    const history = await this.runnerForAccount(canonicalAccountId).getHistory(session.threadId);
     return history.flatMap((message) => {
       if (message.role === "user") {
         const parsed = parsePrompt(message.text);
-        const inboundRoot = accountStatePaths(this.options.paths, accountId).inboundDir;
+        const inboundRoot = accountStatePaths(this.options.paths, canonicalAccountId).inboundDir;
         const attachments = parsed.attachments
           .filter((attachment) => isPathWithin(inboundRoot, attachment.path))
           .map((attachment, index) => sessionAttachment({
@@ -438,29 +447,24 @@ export class AccountManager {
     uploads: SessionUpload[] = [],
     onProgress?: (message: string) => Promise<void> | void
   ): Promise<SessionChatResult> {
-    if (this.closingAccounts.has(accountId)) {
-      throw new Error(`Account is being removed: ${accountId}`);
-    }
-    if (this.stoppingAccounts.has(accountId)) {
-      throw new Error(`Account is stopping: ${accountId}`);
-    }
+    const canonicalAccountId = this.ensureAccountOpen(accountId);
     const prompt = text.trim();
     if (!prompt && !uploads.length) {
       throw new Error("Message text or attachment is required");
     }
-    const store = this.storeFor(accountId);
+    const store = this.storeFor(canonicalAccountId);
     const session = requireSession(store, sessionId);
-    this.setSessionResponding(accountId, session.id, true);
+    this.setSessionResponding(canonicalAccountId, session.id, true);
     try {
       const run = async (): Promise<SessionChatResult> => {
         const currentSession = requireSession(store, session.id);
         const config = this.configProvider();
-        const attachments = this.saveSessionUploads(accountId, currentSession.id, uploads);
+        const attachments = this.saveSessionUploads(canonicalAccountId, currentSession.id, uploads);
         const promptPreview = buildPromptPreview(prompt, attachments);
         if (promptPreview) {
           store.setSessionPromptPreview(currentSession.id, promptPreview);
         }
-        const result = await this.runnerForAccount(accountId, config).run({
+        const result = await this.runnerForAccount(canonicalAccountId, config).run({
           prompt: buildPrompt(prompt, attachments, "Web"),
           cwd: currentSession.workspace,
           threadId: currentSession.threadId,
@@ -497,10 +501,10 @@ export class AccountManager {
       };
       return await this.turnCoordinator.run(
         session.id,
-        () => this.accountTurnCoordinator.run(accountId, run)
+        () => this.accountTurnCoordinator.run(canonicalAccountId, run)
       );
     } finally {
-      this.setSessionResponding(accountId, session.id, false);
+      this.setSessionResponding(canonicalAccountId, session.id, false);
     }
   }
 
@@ -566,13 +570,15 @@ export class AccountManager {
     return store;
   }
 
-  private ensureAccountOpen(accountId: string): void {
-    if (this.closingAccounts.has(accountId)) {
-      throw new Error(`Account is being removed: ${accountId}`);
+  private ensureAccountOpen(accountId: string): string {
+    const canonicalAccountId = loadAccount(this.options.paths, accountId).accountId;
+    if (this.closingAccounts.has(canonicalAccountId)) {
+      throw new Error(`Account is being removed: ${canonicalAccountId}`);
     }
-    if (this.stoppingAccounts.has(accountId)) {
-      throw new Error(`Account is stopping: ${accountId}`);
+    if (this.stoppingAccounts.has(canonicalAccountId)) {
+      throw new Error(`Account is stopping: ${canonicalAccountId}`);
     }
+    return canonicalAccountId;
   }
 
   private isActive(accountId: string, sessionId: string): boolean {
@@ -665,9 +671,16 @@ function sessionAttachment(
   allowedRoots: string[]
 ): SessionAttachmentFile {
   let size: number | undefined;
-  const available = isAllowedLocalFile(action.path, allowedRoots);
+  let available = isAllowedLocalFile(action.path, allowedRoots);
   try {
-    if (available) size = fs.statSync(action.path).size;
+    if (available) {
+      const currentSize = fs.statSync(action.path).size;
+      if (currentSize <= DEFAULT_MAX_OUTBOUND_MEDIA_BYTES) {
+        size = currentSize;
+      } else {
+        available = false;
+      }
+    }
   } catch {
     // Keep historical attachments visible even after their local file is moved.
   }

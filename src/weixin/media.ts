@@ -6,6 +6,7 @@ import type { FetchLike, WeixinApiClient } from "./api.js";
 import type { WeixinInboundAttachment } from "./messages.js";
 
 const DEFAULT_WEIXIN_CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c";
+export const DEFAULT_MAX_OUTBOUND_MEDIA_BYTES = 100 * 1024 * 1024;
 const UPLOAD_MEDIA_TYPE = {
   image: 1,
   video: 2,
@@ -292,10 +293,19 @@ export async function sendLocalMediaFile(input: {
   filePath: string;
   kind?: "image" | "file" | "video";
   allowedRoots?: string[];
+  maxBytes?: number;
   fetch?: FetchLike;
 }): Promise<{ messageId: string; kind: "image" | "file" | "video" }> {
   if (input.allowedRoots && !isAllowedLocalFile(input.filePath, input.allowedRoots)) {
     throw new Error("Local media file is outside the allowed workspace or is not a regular file");
+  }
+  const stat = fs.statSync(input.filePath);
+  if (!stat.isFile()) {
+    throw new Error("Local media file is outside the allowed workspace or is not a regular file");
+  }
+  const maxBytes = input.maxBytes ?? DEFAULT_MAX_OUTBOUND_MEDIA_BYTES;
+  if (stat.size > maxBytes) {
+    throw new Error(`Outbound media exceeds max size ${maxBytes} bytes`);
   }
   const plaintext = fs.readFileSync(input.filePath);
   const rawSize = plaintext.length;

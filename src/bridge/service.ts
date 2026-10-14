@@ -12,11 +12,13 @@ import type { CcWxConfig } from "../state/config.js";
 import { RuntimeStateStore, type ManagedSession } from "../state/runtime-state.js";
 import { WeixinApiClient, isStaleContextError, type FetchLike } from "../weixin/api.js";
 import {
+  DEFAULT_MAX_OUTBOUND_MEDIA_BYTES,
   downloadInboundAttachments,
   InboundMediaTooLargeError,
   isAllowedLocalFile,
   sendLocalMediaFile
 } from "../weixin/media.js";
+import { userFacingMessageHandlingError } from "./errors.js";
 import type { NormalizedWeixinMessage } from "../weixin/messages.js";
 import type { PromptBufferItem } from "./prompt-buffer.js";
 
@@ -360,7 +362,7 @@ export class BridgeService {
       if (error instanceof InboundMediaTooLargeError) throw error;
       items.push({
         kind: "text",
-        text: `[WeChat attachment download failed: ${error instanceof Error ? error.message : String(error)}]`
+        text: `[WeChat attachment download failed: ${userFacingMessageHandlingError(error)}]`
       });
     }
     return items;
@@ -463,10 +465,11 @@ export class BridgeService {
         contextToken: this.options.stateStore.getContextToken(senderId),
         filePath: action.path,
         kind: action.type,
-        allowedRoots: this.options.config.allowedWorkspaces
+        allowedRoots: this.options.config.allowedWorkspaces,
+        maxBytes: Math.min(this.options.config.maxInboundBytes, DEFAULT_MAX_OUTBOUND_MEDIA_BYTES)
       });
     } catch (error) {
-      await this.reply(senderId, `[cc-wx] Failed to send ${action.type}: ${error instanceof Error ? error.message : String(error)}`);
+      await this.reply(senderId, `[cc-wx] Failed to send ${action.type}: ${userFacingMessageHandlingError(error)}`);
     }
   }
 

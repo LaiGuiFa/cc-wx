@@ -122,6 +122,25 @@ test("uploads local images to CDN and sends native image messages", async (t) =>
   assert.equal(Buffer.from(String(imageMessage?.aesKeyBase64), "base64").toString("utf8"), uploadRequest?.aesKeyHex);
 });
 
+test("rejects outbound media over the configured limit before reading or uploading", async (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-wx-media-outbound-limit-"));
+  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  const filePath = path.join(tmpDir, "large.bin");
+  fs.writeFileSync(filePath, Buffer.alloc(4));
+
+  await assert.rejects(sendLocalMediaFile({
+    client: {
+      async getUploadUrl() { throw new Error("must not upload"); },
+      async sendImageMessage() { throw new Error("must not send"); },
+      async sendFileMessage() { throw new Error("must not send"); },
+      async sendVideoMessage() { throw new Error("must not send"); }
+    },
+    toUserId: "alice@im.wechat",
+    filePath,
+    maxBytes: 3
+  }), /Outbound media exceeds max size 3 bytes/);
+});
+
 test("uploads local videos to CDN and sends native video messages", async (t) => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-wx-video-"));
   t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
