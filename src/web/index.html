@@ -52,6 +52,7 @@
         <button class="tab is-active" type="button" data-view="accounts"><i data-lucide="users-round"></i><span>账号管理</span></button>
         <button class="tab" type="button" data-view="sessions"><i data-lucide="messages-square"></i><span>会话管理</span></button>
         <button class="tab" type="button" data-view="settings"><i data-lucide="settings-2"></i><span>系统设置</span></button>
+        <button class="tab" type="button" data-view="model-settings"><i data-lucide="sliders-horizontal"></i><span>模型设置</span></button>
         <button class="tab" type="button" data-view="help"><i data-lucide="book-open"></i><span>使用说明</span></button>
       </nav>
       <div class="sidebar-footer">
@@ -163,7 +164,7 @@
       <div class="section-heading">
         <div>
           <p class="eyebrow">LOCAL CODEX</p>
-          <h1>设置</h1>
+          <h1>系统设置</h1>
         </div>
         <button class="button button-primary" type="submit" form="settingsForm">
           <i data-lucide="save"></i>
@@ -207,6 +208,21 @@
             </label>
           </div>
         </div>
+      </form>
+    </section>
+
+    <section class="view settings-view" id="modelSettingsView" data-view-panel="model-settings" hidden>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">CODEX RUNTIME</p>
+          <h1>模型设置</h1>
+        </div>
+        <button class="button button-primary" type="submit" form="modelSettingsForm">
+          <i data-lucide="save"></i>
+          <span>保存设置</span>
+        </button>
+      </div>
+      <form id="modelSettingsForm" class="settings-form">
         <div class="settings-group">
           <h2>Codex</h2>
           <div class="field-grid">

@@ -70,7 +70,8 @@ function bindEvents() {
   document.querySelector("#newSessionButton").addEventListener("click", openNewSessionDialog);
   document.querySelector("#sessionWorkspaceImportButton").addEventListener("click", () => void importSessionWorkspace());
   document.querySelector("#refreshModelsButton").addEventListener("click", () => void refreshModelList());
-  document.querySelector("#settingsForm").addEventListener("submit", (event) => void saveSettings(event));
+  document.querySelector("#settingsForm").addEventListener("submit", (event) => void saveSettings(event, "system"));
+  document.querySelector("#modelSettingsForm").addEventListener("submit", (event) => void saveSettings(event, "model"));
   document.querySelectorAll("[data-workspace-action]").forEach((button) => {
     button.addEventListener("click", () => void handleWorkspaceAction(button.dataset.workspaceAction));
   });
@@ -1241,22 +1242,45 @@ async function saveSession(event) {
   }
 }
 
-async function saveSettings(event) {
-  event.preventDefault();
-  const button = event.submitter;
-  try {
-    button.disabled = true;
-    const result = await api("/api/config", {
-      method: "PUT",
-      body: {
+function settingsPayload(scope) {
+  const config = state.config || {};
+  const workspace = scope === "system"
+    ? {
         defaultCwd: document.querySelector("#defaultCwdInput").value.trim(),
-        allowedWorkspaces: document.querySelector("#allowedWorkspacesInput").value.split("\n").map((line) => line.trim()).filter(Boolean),
+        allowedWorkspaces: document.querySelector("#allowedWorkspacesInput").value.split("\n").map((line) => line.trim()).filter(Boolean)
+      }
+    : {
+        defaultCwd: config.defaultCwd || document.querySelector("#defaultCwdInput").value.trim(),
+        allowedWorkspaces: Array.isArray(config.allowedWorkspaces)
+          ? config.allowedWorkspaces
+          : document.querySelector("#allowedWorkspacesInput").value.split("\n").map((line) => line.trim()).filter(Boolean)
+      };
+  const codex = scope === "model"
+    ? {
         codexBackend: document.querySelector("#backendInput").value,
         codexExecSandbox: document.querySelector("#sandboxInput").value || null,
         model: document.querySelector("#modelInput").value.trim(),
         effort: document.querySelector("#effortInput").value.trim(),
         streamReplies: document.querySelector("#streamRepliesInput").checked
       }
+    : {
+        codexBackend: config.codexBackend || "auto",
+        codexExecSandbox: config.codexExecSandbox || null,
+        model: config.model || "",
+        effort: config.effort || "",
+        streamReplies: Boolean(config.streamReplies)
+      };
+  return { ...workspace, ...codex };
+}
+
+async function saveSettings(event, scope) {
+  event.preventDefault();
+  const button = event.submitter;
+  try {
+    button.disabled = true;
+    const result = await api("/api/config", {
+      method: "PUT",
+      body: settingsPayload(scope)
     });
     state.config = result.config;
     state.codexRuntime = result.codexRuntime;
@@ -1271,7 +1295,7 @@ async function saveSettings(event) {
 }
 
 function showView(name, updateHash = true) {
-  const valid = ["accounts", "sessions", "settings", "help"].includes(name) ? name : "accounts";
+  const valid = ["accounts", "sessions", "settings", "model-settings", "help"].includes(name) ? name : "accounts";
   document.querySelectorAll("[data-view-panel]").forEach((panel) => {
     const visible = panel.dataset.viewPanel === valid;
     panel.hidden = !visible;
