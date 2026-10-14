@@ -1,0 +1,81 @@
+<h1 align="center">cc-wx</h1>
+
+<p align="center">
+  <strong>中文</strong> | <a href="./README.en.md">English</a>
+</p>
+
+<p align="center">
+  <strong>把个人微信账号接入本机 OpenAI Codex。</strong>
+</p>
+
+`cc-wx`（Codex Connect Weixin）是一个跨平台、本机运行的微信到 Codex 服务。启动后打开本地 Web 管理页，扫码接入微信，即可从微信私聊控制本机 Codex、管理工作目录和切换会话。
+
+```text
+微信账号 <-> cc-wx <-> 本机 Codex <-> 允许的工作目录
+```
+
+服务只监听 `127.0.0.1`，不是通用消息网关，也不会把管理页开放到局域网或公网。
+
+## 功能概览
+
+- 支持多个微信账号，每个账号拥有独立的授权、附件、会话和运行状态。
+- 支持文本、图片、语音、视频和文件输入；Codex 可回传本机图片、视频和文件。
+- Web 端提供账号、会话、工作目录、模型、推理强度和过程进度管理。
+- 微信端支持 `/status`、`/new`、`/resume`、`/bind`、`/model`、`/effort`、`/stream`、`/prompt` 和 `/stop`。
+- 新会话和续接会话优先使用 Codex app-server，必要时回退到 `codex exec`。
+- 过程进度默认开启，支持消息去重、断线恢复和账号历史保留。
+
+## 微信命令
+
+```text
+/help                         查看命令
+/status                       查看会话、工作目录、thread、backend、模型和推理强度
+/bind <absolute-path>          绑定允许列表内的工作目录
+/new                          创建新的受管 Codex 会话
+/resume                       查看历史会话
+/resume R<编号>               继续指定的历史会话
+/model                        查看或切换模型
+/effort                       查看或切换推理强度
+/stream                       查看或切换过程进度
+/prompt start                 开始缓冲多条消息
+/prompt done                 提交缓冲内容
+/stop                         中断当前任务
+```
+
+普通消息进入当前活动会话。附件会保存到账号独立的入站目录，并以本地路径加入 prompt；有微信转写文本的语音优先使用转写结果。
+
+## 文件回传
+
+Codex 可在最终回复中声明发送本机文件：
+
+````text
+```cc-wx-actions
+{
+  "send": [
+    { "type": "image", "path": "/absolute/path/chart.png" },
+    { "type": "video", "path": "/absolute/path/demo.mp4" },
+    { "type": "file", "path": "/absolute/path/report.pdf" }
+  ]
+}
+```
+````
+
+只接受本机绝对路径；远程 URL 不会被上传。
+
+## 本地数据与安全
+
+服务状态和默认 Codex 工作目录位于：
+
+```text
+~/.cc-wx/
+  accounts/                 微信账号凭据
+  retained-accounts.json    已移除账号的恢复索引
+  runtime/<account-id>/     授权和会话状态
+  inbound/<account-id>/     入站附件
+  config.json               Codex 和工作区配置
+  logs/
+```
+
+不要提交或分享该目录。服务拒绝非本机 Host 和 Origin，修改 API 需要页面令牌，微信凭据不会返回浏览器；`/bind` 只能选择允许列表内的绝对路径。
+
+服务始终只绑定 `127.0.0.1`。启用 `danger-full-access` 前，请确认能够接受 Codex 访问整机文件的风险。

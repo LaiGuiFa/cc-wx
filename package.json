@@ -1,0 +1,52 @@
+{
+  "name": "cc-wx",
+  "version": "1.0.0",
+  "description": "Codex Connect Weixin: a local multi-account WeChat server for OpenAI Codex.",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "wechat",
+    "weixin",
+    "openai",
+    "bridge"
+  ],
+  "type": "module",
+  "bin": {
+    "cc-wx": "dist/server/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "README.en.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && npm run copy:web",
+    "copy:web": "node scripts/copy-web-assets.mjs",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "dev": "tsx src/server/index.ts",
+    "start": "node dist/server/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --import tsx test/*.test.ts",
+    "prepack": "npm run clean && npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.12",
+    "lucide": "^0.468.0",
+    "marked": "^18.0.6",
+    "open": "^10.1.0",
+    "qrcode": "^1.5.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/qrcode": "^1.5.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}

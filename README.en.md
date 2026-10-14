@@ -1,0 +1,81 @@
+<h1 align="center">cc-wx</h1>
+
+<p align="center">
+  <a href="./README.md">中文</a> | <strong>English</strong>
+</p>
+
+<p align="center">
+  <strong>Connect personal WeChat accounts to a local OpenAI Codex installation.</strong>
+</p>
+
+`cc-wx` (Codex Connect Weixin) is a cross-platform, local-only WeChat service for Codex. Start it to open a local Web management page, scan a WeChat QR code, and control Codex from private chats while managing workspaces and sessions.
+
+```text
+WeChat accounts <-> cc-wx <-> local Codex <-> allowed workspaces
+```
+
+The service listens only on `127.0.0.1`. It is not a general messaging gateway and does not expose the management page to the LAN or public Internet.
+
+## Features
+
+- Multiple isolated WeChat accounts with separate authorization, attachments, sessions, and runtime state.
+- Text, images, voice, video, and file input; Codex can send local images, videos, and files back to WeChat.
+- Web management for accounts, sessions, workspaces, models, reasoning effort, and process progress.
+- WeChat commands for status, session lifecycle, workspace binding, model settings, prompt buffering, and task interruption.
+- Codex app-server first, with automatic fallback to `codex exec` when needed.
+- Process progress enabled by default, with deduplication, recovery, and optional retained account history.
+
+## WeChat commands
+
+```text
+/help                         Show commands
+/status                       Show session, workspace, thread, backend, model, and effort
+/bind <absolute-path>          Bind to an allowed workspace
+/new                          Create a managed Codex session
+/resume                       List historical sessions
+/resume R<number>             Continue a selected session
+/model                        Show or switch the model
+/effort                       Show or switch reasoning effort
+/stream                       Show or switch process progress
+/prompt start                 Buffer multiple messages
+/prompt done                 Submit the buffered prompt
+/stop                         Interrupt the current task
+```
+
+Regular messages enter the active session. Attachments are stored under the account's inbound directory and added to the prompt by local path; WeChat voice transcription is preferred when available.
+
+## Sending local files
+
+Codex can request local-file delivery in its final response:
+
+````text
+```cc-wx-actions
+{
+  "send": [
+    { "type": "image", "path": "/absolute/path/chart.png" },
+    { "type": "video", "path": "/absolute/path/demo.mp4" },
+    { "type": "file", "path": "/absolute/path/report.pdf" }
+  ]
+}
+```
+````
+
+Only absolute local paths are accepted. Remote URLs are not uploaded.
+
+## Local data and security
+
+Service state and the default Codex workspace are stored under:
+
+```text
+~/.cc-wx/
+  accounts/                 WeChat account credentials
+  retained-accounts.json    Recovery index for removed accounts
+  runtime/<account-id>/     Authorization and session state
+  inbound/<account-id>/     Inbound attachments
+  config.json               Codex and workspace configuration
+  logs/
+```
+
+Do not commit or share this directory. Non-local Host and Origin values are rejected, mutating APIs require a page token, credentials never reach the browser, and `/bind` accepts only absolute paths in the workspace allowlist.
+
+The service always binds to `127.0.0.1`. Enable `danger-full-access` only when full-machine Codex access is acceptable.
