@@ -220,9 +220,12 @@ export class AppServerCodexRunner {
     });
   }
 
-  async listModels(): Promise<CodexModelOption[]> {
-    if (this.modelOptions) {
+  async listModels(forceRefresh = false): Promise<CodexModelOption[]> {
+    if (!forceRefresh && this.modelOptions) {
       return structuredClone(this.modelOptions);
+    }
+    if (forceRefresh) {
+      this.modelOptions = undefined;
     }
     await this.ensureConnected();
     const models: CodexModelOption[] = [];

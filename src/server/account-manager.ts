@@ -317,10 +317,10 @@ export class AccountManager {
     }
   }
 
-  async getCodexModels(): Promise<CodexModelOption[]> {
+  async getCodexModels(forceRefresh = false): Promise<CodexModelOption[]> {
     let models: CodexModelOption[] = [];
     try {
-      models = await this.utilityRunnerFor().listModels();
+      models = await this.utilityRunnerFor().listModels(forceRefresh);
     } catch (error) {
       console.warn(`Codex model list unavailable: ${error instanceof Error ? error.message : String(error)}`);
     }

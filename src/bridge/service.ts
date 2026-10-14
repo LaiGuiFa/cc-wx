@@ -7,7 +7,8 @@ import { PromptBuffer } from "./prompt-buffer.js";
 import { SessionTurnCoordinator } from "./session-turn.js";
 import type { CodexModelOption, CodexRuntimeInfo } from "../codex/app-server-runner.js";
 import { HybridCodexRunner } from "../codex/runner.js";
-import { isWorkspaceAllowed, type CcWxConfig } from "../state/config.js";
+import type { CodexExecSandbox } from "../codex/sandbox.js";
+import type { CcWxConfig } from "../state/config.js";
 import { RuntimeStateStore, type ManagedSession } from "../state/runtime-state.js";
 import { WeixinApiClient, isStaleContextError, type FetchLike } from "../weixin/api.js";
 import {
@@ -97,8 +98,8 @@ export class BridgeService {
       case "where":
         await this.reply(message.senderId, await this.statusText(message.senderId));
         return;
-      case "bind":
-        await this.bindWorkspace(message.senderId, command.arg);
+      case "work":
+        await this.selectWorkspace(message.senderId, command.arg);
         return;
       case "new":
         this.options.stateStore.createSession(message.senderId, this.options.stateStore.getWorkspace(message.senderId) ?? this.options.config.defaultCwd);
@@ -128,18 +129,22 @@ export class BridgeService {
     }
   }
 
-  private async bindWorkspace(senderId: string, rawPath: string): Promise<void> {
-    if (!rawPath.trim()) {
-      await this.reply(senderId, "Usage: /bind <absolute-workspace-path>");
-      return;
+  private async selectWorkspace(senderId: string, rawInput: string): Promise<void> {
+    const workspaces = this.options.config.allowedWorkspaces.map((workspace) => path.resolve(workspace));
+    const input = rawInput.trim();
+    if (/^\d+$/.test(input)) {
+      const index = Number(input);
+      if (Number.isSafeInteger(index) && index >= 1 && index <= workspaces.length) {
+        const workspace = workspaces[index - 1];
+        this.options.stateStore.setWorkspace(senderId, workspace);
+        await this.reply(senderId, `已切换到工作目录：\n${workspace}`);
+        return;
+      }
     }
-    const workspace = path.resolve(rawPath.trim());
-    if (!isWorkspaceAllowed(workspace, this.options.config.allowedWorkspaces)) {
-      await this.reply(senderId, `Workspace is not allowed: ${workspace}`);
-      return;
-    }
-    this.options.stateStore.setWorkspace(senderId, workspace);
-    await this.reply(senderId, `Bound to workspace:\n${workspace}`);
+    await this.reply(senderId, [
+      "允许的工作目录：",
+      ...workspaces.map((workspace, index) => `${index + 1}、${workspace}`)
+    ].join("\n"));
   }
 
   private async handleResumeCommand(senderId: string, arg: string): Promise<void> {
@@ -495,16 +500,11 @@ export class BridgeService {
     const workspace = session?.workspace ?? this.options.config.defaultCwd;
     const runtime = await this.effectiveRuntime(senderId);
     return [
-      "cc-wx status",
-      `sender: ${senderId}`,
-      `session: ${session?.title ?? "(new)"}`,
-      `workspace: ${workspace}`,
-      `thread: ${session?.threadId || "(new)"}`,
-      `backend: ${this.options.config.codexBackend}`,
-      `exec sandbox: ${this.options.config.codexExecSandbox ?? "(Codex default)"}`,
-      `model: ${runtime.model ?? "(Codex default)"}`,
-      `effort: ${runtime.effort ?? "(Codex default)"}`,
-      `stream replies: ${(session?.streamReplies ?? this.options.config.streamReplies) ? "on" : "off"}${typeof session?.streamReplies === "boolean" ? " (session)" : " (global)"}`
+      `模型：${runtime.model ?? "Codex 默认"}`,
+      `思考强度：${formatEffort(runtime.effort)}`,
+      `工作目录：${workspace}`,
+      `会话 ID：${session?.threadId || "尚未创建"}`,
+      `沙箱权限：${formatSandboxPermission(this.options.config.codexExecSandbox)}`
     ].join("\n");
   }
 
@@ -577,7 +577,7 @@ function helpText(): string {
     "cc-wx commands:",
     "/help - show commands",
     "/status - show current binding",
-    "/bind <absolute-path> - bind this chat to a workspace",
+    "/work [number] - list or switch allowed workspaces",
     "/new - create a new managed Codex session",
     "/resume [R-number] - list or switch historical sessions",
     "/model [number|model-id|default] - view or switch this session's model",
@@ -637,4 +637,13 @@ function formatEffort(effort?: string): string {
     ultra: "极高"
   };
   return labels[effort] ? `${labels[effort]}（${effort}）` : effort;
+}
+
+function formatSandboxPermission(sandbox?: CodexExecSandbox): string {
+  const labels: Record<CodexExecSandbox, string> = {
+    "read-only": "只读",
+    "workspace-write": "工作区可写",
+    "danger-full-access": "完整访问"
+  };
+  return sandbox ? labels[sandbox] : "Codex 默认";
 }

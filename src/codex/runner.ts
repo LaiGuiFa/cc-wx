@@ -89,8 +89,8 @@ export class HybridCodexRunner {
     return this.appServer.getRuntimeInfo(cwd, threadId);
   }
 
-  async listModels(): Promise<CodexModelOption[]> {
-    return this.appServer.listModels();
+  async listModels(forceRefresh = false): Promise<CodexModelOption[]> {
+    return this.appServer.listModels(forceRefresh);
   }
 
   close(): void {

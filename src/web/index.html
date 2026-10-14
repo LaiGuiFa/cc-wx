@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>cc-wx</title>
+  <link rel="icon" type="image/png" href="/assets/cc-wx-logo.png?v=2">
   <link rel="stylesheet" href="/styles.css">
   <script defer src="/vendor/lucide.min.js"></script>
   <script defer src="/vendor/marked.umd.js"></script>
@@ -15,14 +16,27 @@
   <header class="app-header">
     <div class="header-inner">
       <a class="brand" href="#accounts" aria-label="cc-wx 首页">
-        <span class="brand-name">cc-wx</span>
-        <span class="brand-version" id="productVersion" aria-label="cc-wx 版本" hidden></span>
+        <img class="brand-logo" src="/assets/cc-wx-logo.png" alt="cc-wx">
+        <span class="brand-copy">
+          <span class="brand-name">cc-wx</span>
+          <span class="brand-tagline">让微信与 GPT 连接</span>
+        </span>
       </a>
-      <nav class="view-tabs" aria-label="管理视图">
-        <button class="tab is-active" type="button" data-view="accounts">微信账号</button>
-        <button class="tab" type="button" data-view="sessions">会话</button>
-        <button class="tab" type="button" data-view="settings">设置</button>
-      </nav>
+      <div class="header-claim" aria-hidden="true">一条消息，连接你的 AI 助手</div>
+      <div class="header-highlights" aria-label="产品能力">
+        <span class="header-highlight">
+          <i data-lucide="users-round"></i>
+          <span><strong>多账号管理</strong><small>独立授权 · 独立会话</small></span>
+        </span>
+        <span class="header-highlight">
+          <i data-lucide="panel-top"></i>
+          <span><strong>多模态输入</strong><small>文本 / 图片 / 语音 / 文件</small></span>
+        </span>
+        <span class="header-highlight">
+          <i data-lucide="bot"></i>
+          <span><strong>Codex 驱动</strong><small>app-server 优先 · exec 兜底</small></span>
+        </span>
+      </div>
       <div class="header-actions">
         <button class="button button-primary header-action" id="addAccountButton" type="button" title="添加微信" aria-label="添加微信">
           <i data-lucide="scan-line"></i>
@@ -32,23 +46,37 @@
     </div>
   </header>
 
-  <main>
-    <section class="status-band" aria-label="服务概览">
-      <div class="status-inner">
-        <div class="service-state"><span class="pulse-dot" id="serviceDot"></span><span id="serviceStateText">正在检查 Codex</span></div>
-        <dl class="metrics">
+  <div class="app-layout">
+    <aside class="app-sidebar" aria-label="主导航">
+      <nav class="view-tabs" aria-label="管理视图">
+        <button class="tab is-active" type="button" data-view="accounts"><i data-lucide="users-round"></i><span>账号管理</span></button>
+        <button class="tab" type="button" data-view="sessions"><i data-lucide="messages-square"></i><span>会话管理</span></button>
+        <button class="tab" type="button" data-view="settings"><i data-lucide="settings-2"></i><span>系统设置</span></button>
+        <button class="tab" type="button" data-view="help"><i data-lucide="book-open"></i><span>使用说明</span></button>
+      </nav>
+      <div class="sidebar-footer">
+        <dl class="sidebar-metrics" aria-label="运行概览">
           <div><dt>运行账号</dt><dd id="runningAccountMetric">0</dd></div>
           <div><dt>受管会话</dt><dd id="sessionMetric">0</dd></div>
-          <div class="workspace-metric"><dt>Codex 工作目录</dt><dd id="workspaceMetric">--</dd></div>
         </dl>
+        <div class="sidebar-product-version">
+          <span>cc-wx</span>
+          <strong id="productVersion" aria-label="cc-wx 版本">--</strong>
+        </div>
+        <div class="sidebar-service">
+          <span class="pulse-dot" id="serviceDot"></span>
+          <span id="serviceStateText">正在检查 Codex</span>
+        </div>
       </div>
-    </section>
+    </aside>
 
+    <div class="app-content">
+    <main>
     <section class="view is-visible" id="accountsView" data-view-panel="accounts">
       <div class="section-heading">
         <div>
           <p class="eyebrow">WECHAT ACCOUNTS</p>
-          <h1>微信账号</h1>
+          <h1>账号管理</h1>
         </div>
         <button class="icon-button" id="refreshAccountsButton" type="button" title="刷新账号状态" aria-label="刷新账号状态">
           <i data-lucide="refresh-cw"></i>
@@ -58,21 +86,21 @@
     </section>
 
     <section class="view" id="sessionsView" data-view-panel="sessions" hidden>
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">CODEX SESSIONS</p>
-          <h1>会话</h1>
-        </div>
-        <button class="button button-secondary" id="newSessionButton" type="button">
+      <div class="session-account-bar" aria-label="微信账号筛选">
+        <span class="session-account-bar-label"><i data-lucide="users"></i><span>微信账号</span></span>
+        <div class="session-account-tabs" id="sessionAccountTabs" aria-label="按微信账号筛选会话"></div>
+        <button class="button button-secondary session-new-button" id="newSessionButton" type="button">
           <i data-lucide="plus"></i>
           <span>新建会话</span>
         </button>
       </div>
-      <div class="session-account-bar" aria-label="微信账号筛选">
-        <span class="session-account-bar-label"><i data-lucide="users"></i><span>微信账号</span></span>
-        <div class="session-account-tabs" id="sessionAccountTabs" aria-label="按微信账号筛选会话"></div>
-      </div>
       <div class="session-workbench">
+        <aside class="session-workspace-sidebar" aria-label="工作目录筛选">
+          <div class="session-sidebar-head">
+            <span>工作目录</span>
+          </div>
+          <div id="sessionWorkspaceList" class="session-workspace-list" aria-live="polite"></div>
+        </aside>
         <aside class="session-sidebar" aria-label="Codex 会话列表">
           <div class="session-sidebar-head">
             <span>历史会话</span>
@@ -137,18 +165,47 @@
           <p class="eyebrow">LOCAL CODEX</p>
           <h1>设置</h1>
         </div>
+        <button class="button button-primary" type="submit" form="settingsForm">
+          <i data-lucide="save"></i>
+          <span>保存设置</span>
+        </button>
       </div>
       <form id="settingsForm" class="settings-form">
         <div class="settings-group">
           <h2>工作区</h2>
-          <label>
-            <span>默认工作目录</span>
-            <input id="defaultCwdInput" name="defaultCwd" autocomplete="off" required>
-          </label>
-          <label>
-            <span>允许的工作目录</span>
-            <textarea id="allowedWorkspacesInput" name="allowedWorkspaces" rows="5" required></textarea>
-          </label>
+          <div class="workspace-fields">
+            <label class="workspace-field">
+              <span>默认工作目录</span>
+              <div class="workspace-input-row">
+                <input id="defaultCwdInput" name="defaultCwd" autocomplete="off" readonly required>
+                <button class="button button-secondary workspace-import-button" type="button" data-workspace-action="import-default">
+                  <i data-lucide="folder-open"></i>
+                  <span>导入</span>
+                </button>
+                <button class="button button-secondary workspace-delete-button" type="button" data-workspace-action="delete-default">
+                  <i data-lucide="trash-2"></i>
+                  <span>删除</span>
+                </button>
+              </div>
+            </label>
+            <label class="workspace-field">
+              <span>允许的工作目录</span>
+              <div class="workspace-input-row workspace-allowed-row">
+                <textarea id="allowedWorkspacesInput" name="allowedWorkspaces" rows="5" readonly required></textarea>
+                <div class="workspace-actions">
+                  <button class="button button-secondary workspace-import-button" type="button" data-workspace-action="import-allowed">
+                    <i data-lucide="folder-open"></i>
+                    <span>导入</span>
+                  </button>
+                  <button class="button button-secondary workspace-delete-button" type="button" data-workspace-action="delete-allowed">
+                    <i data-lucide="trash-2"></i>
+                    <span>删除</span>
+                  </button>
+                </div>
+              </div>
+              <small class="field-hint">最多保留 5 个目录，每行一个；删除时选择要移除的目录。</small>
+            </label>
+          </div>
         </div>
         <div class="settings-group">
           <h2>Codex</h2>
@@ -162,25 +219,30 @@
               </select>
             </label>
             <label>
-              <span>Exec 沙箱</span>
+              <span>沙箱权限</span>
               <select id="sandboxInput" name="codexExecSandbox">
-                <option value="">沿用 Codex 设置</option>
+                <option value="">Codex 默认</option>
                 <option value="read-only">只读</option>
                 <option value="workspace-write">工作区可写</option>
                 <option value="danger-full-access">完整访问</option>
               </select>
             </label>
-            <label>
+            <label class="model-setting-field">
               <span>模型</span>
-              <select id="modelInput" name="model">
-                <option value="">沿用 Codex 设置</option>
-              </select>
+              <div class="model-input-row">
+                <select id="modelInput" name="model">
+                  <option value="">Codex 默认</option>
+                </select>
+                <button class="icon-button model-refresh-button" id="refreshModelsButton" type="button" title="获取模型列表" aria-label="获取模型列表">
+                  <i data-lucide="download"></i>
+                </button>
+              </div>
               <small class="field-hint effective-setting"><span>当前生效</span><strong id="effectiveModelValue">正在读取</strong></small>
             </label>
             <label>
               <span>推理强度</span>
               <select id="effortInput" name="effort">
-                <option value="">沿用模型默认</option>
+                <option value="">Codex 默认</option>
               </select>
               <small class="field-hint effective-setting"><span>当前生效</span><strong id="effectiveEffortValue">正在读取</strong></small>
             </label>
@@ -193,24 +255,88 @@
             </label>
           </div>
         </div>
-        <div class="settings-group">
-          <h2>版本</h2>
-          <div class="settings-version">
-            <span>
-              <small>当前版本</small>
-              <strong id="settingsVersionValue">--</strong>
-            </span>
-          </div>
-        </div>
-        <div class="form-actions">
-          <button class="button button-primary" type="submit">
-            <i data-lucide="save"></i>
-            <span>保存设置</span>
-          </button>
-        </div>
       </form>
     </section>
-  </main>
+
+    <section class="view help-view" id="helpView" data-view-panel="help" hidden>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">USAGE GUIDE</p>
+          <h1>使用说明</h1>
+        </div>
+      </div>
+      <div class="help-layout">
+        <section class="help-section help-connection">
+          <div class="help-section-heading">
+            <span class="help-section-icon"><i data-lucide="link-2"></i></span>
+            <div>
+              <h2>连接微信并开始交互</h2>
+              <p>cc-wx 将微信消息转发给本机 Codex，并把结果返回到微信。</p>
+            </div>
+          </div>
+          <ol class="help-steps">
+            <li><strong>添加微信账号</strong><span>点击页面右上角“添加微信”，使用微信扫描二维码并确认登录。</span></li>
+            <li><strong>完成联系人授权</strong><span>登录后，从微信向账号发送一条消息；回到账号页允许该联系人的访问请求。</span></li>
+            <li><strong>创建或选择会话</strong><span>在会话管理中创建工作会话，绑定允许的工作目录，再从微信发送普通消息。</span></li>
+            <li><strong>继续处理任务</strong><span>普通消息进入当前活动会话，Codex 的回复、过程进度和可回传文件会返回到微信。</span></li>
+          </ol>
+        </section>
+
+        <section class="help-section help-overview">
+          <div class="help-section-heading">
+            <span class="help-section-icon"><i data-lucide="layers-3"></i></span>
+            <div>
+              <h2>功能概览</h2>
+              <p>当前版本支持的主要能力。</p>
+            </div>
+          </div>
+          <ul class="help-list">
+            <li>支持多个微信账号，每个账号拥有独立授权、附件、会话和运行状态。</li>
+            <li>支持文本、图片、语音、视频和文件输入；Codex 可回传本机图片、视频和文件。</li>
+            <li>管理页支持账号、会话、工作目录、模型、推理强度和过程进度管理。</li>
+            <li>新会话和续接会话优先使用 Codex app-server，必要时回退到 codex exec。</li>
+            <li>过程进度默认开启，并支持消息去重、断线恢复和账号历史保留。</li>
+          </ul>
+        </section>
+
+        <section class="help-section help-commands">
+          <div class="help-section-heading">
+            <span class="help-section-icon"><i data-lucide="terminal-square"></i></span>
+            <div>
+              <h2>微信命令</h2>
+              <p>在已授权的微信联系人中发送以下命令。</p>
+            </div>
+          </div>
+          <dl class="command-list">
+            <div><dt><code>/help</code></dt><dd>查看命令帮助</dd></div>
+            <div><dt><code>/status</code></dt><dd>查看模型、思考强度、工作目录、会话 ID 和沙箱权限</dd></div>
+            <div><dt><code>/work [编号]</code></dt><dd>列出或切换允许列表内的工作目录</dd></div>
+            <div><dt><code>/new</code></dt><dd>创建新的受管 Codex 会话</dd></div>
+            <div><dt><code>/resume</code></dt><dd>查看历史会话</dd></div>
+            <div><dt><code>/resume R&lt;编号&gt;</code></dt><dd>继续指定的历史会话</dd></div>
+            <div><dt><code>/model</code></dt><dd>查看或切换模型</dd></div>
+            <div><dt><code>/effort</code></dt><dd>查看或切换推理强度</dd></div>
+            <div><dt><code>/stream</code></dt><dd>开启或关闭过程进度</dd></div>
+            <div><dt><code>/prompt start</code></dt><dd>开始缓冲多条消息</dd></div>
+            <div><dt><code>/prompt done</code></dt><dd>提交缓冲内容</dd></div>
+            <div><dt><code>/stop</code></dt><dd>中断当前任务</dd></div>
+          </dl>
+        </section>
+
+        <section class="help-section help-message">
+          <div class="help-section-heading">
+            <span class="help-section-icon"><i data-lucide="paperclip"></i></span>
+            <div>
+              <h2>消息与文件</h2>
+              <p>普通消息进入当前活动会话，附件会保存到对应微信账号的入站目录，并以本地路径加入 prompt。语音消息优先使用微信转写文本。</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+    </main>
+    </div>
+  </div>
 
   <dialog class="modal qr-modal" id="qrDialog">
     <div class="modal-header">
@@ -325,13 +451,24 @@
           <span>微信账号</span>
           <select id="sessionSenderInput" required></select>
         </label>
+        <label id="senderReadonlyField" hidden>
+          <span>微信账号</span>
+          <input id="sessionSenderReadonlyInput" readonly>
+        </label>
         <label>
           <span>会话名称</span>
           <input id="sessionTitleInput" maxlength="80" autocomplete="off" required>
         </label>
         <label id="sessionWorkspaceField">
           <span>工作目录</span>
-          <input id="sessionWorkspaceInput" autocomplete="off" required>
+          <div class="session-workspace-input-row">
+            <input id="sessionWorkspaceInput" autocomplete="off" required>
+            <button class="button button-secondary" id="sessionWorkspaceImportButton" type="button">
+              <i data-lucide="folder-open"></i>
+              <span>导入</span>
+            </button>
+          </div>
+          <small class="field-hint">新建会话只能选择一个允许的工作目录；导入后输入框只读。</small>
         </label>
       </div>
       <div class="modal-footer">

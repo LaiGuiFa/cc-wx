@@ -21,7 +21,7 @@ The service listens only on `127.0.0.1`. It is not a general messaging gateway a
 - Multiple isolated WeChat accounts with separate authorization, attachments, sessions, and runtime state.
 - Text, images, voice, video, and file input; Codex can send local images, videos, and files back to WeChat.
 - Web management for accounts, sessions, workspaces, models, reasoning effort, and process progress.
-- WeChat commands for status, session lifecycle, workspace binding, model settings, prompt buffering, and task interruption.
+- WeChat commands for status, session lifecycle, workspace selection, model settings, prompt buffering, and task interruption.
 - Codex app-server first, with automatic fallback to `codex exec` when needed.
 - Process progress enabled by default, with deduplication, recovery, and optional retained account history.
 
@@ -30,7 +30,8 @@ The service listens only on `127.0.0.1`. It is not a general messaging gateway a
 ```text
 /help                         Show commands
 /status                       Show session, workspace, thread, backend, model, and effort
-/bind <absolute-path>          Bind to an allowed workspace
+/work                          List allowed workspaces
+/work <number>                 Switch the active session's workspace
 /new                          Create a managed Codex session
 /resume                       List historical sessions
 /resume R<number>             Continue a selected session
@@ -41,6 +42,8 @@ The service listens only on `127.0.0.1`. It is not a general messaging gateway a
 /prompt done                 Submit the buffered prompt
 /stop                         Interrupt the current task
 ```
+
+In **Settings**, use the directory picker to configure the default workspace and the allowlist, which supports up to five workspaces. Send `/work` in WeChat to list them, then `/work 1` to switch. An invalid or out-of-range number shows the list again. Switching updates the active session's workspace and clears its Codex thread, so subsequent messages start a new context in the selected directory.
 
 Regular messages enter the active session. Attachments are stored under the account's inbound directory and added to the prompt by local path; WeChat voice transcription is preferred when available.
 
@@ -76,6 +79,6 @@ Service state and the default Codex workspace are stored under:
   logs/
 ```
 
-Do not commit or share this directory. Non-local Host and Origin values are rejected, mutating APIs require a page token, credentials never reach the browser, and `/bind` accepts only absolute paths in the workspace allowlist.
+Do not commit or share this directory. Non-local Host and Origin values are rejected, mutating APIs require a page token, credentials never reach the browser, and `/work` selects only from the workspace allowlist.
 
 The service always binds to `127.0.0.1`. Enable `danger-full-access` only when full-machine Codex access is acceptable.

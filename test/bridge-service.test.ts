@@ -23,7 +23,8 @@ test("reports WeChat Codex turn status and resolves runtime details for status",
     config: {
       ...defaultConfig(tmpDir),
       allowedSenderIds: ["alice@im.wechat"],
-      codexBackend: "auto"
+      codexBackend: "auto",
+      codexExecSandbox: "workspace-write"
     },
     stateStore,
     onTurnStatus: (status) => statuses.push(status),
@@ -65,8 +66,73 @@ test("reports WeChat Codex turn status and resolves runtime details for status",
     text: "/status",
     raw: {}
   });
-  assert.match(replies.at(-1) ?? "", /model: gpt-test/);
-  assert.match(replies.at(-1) ?? "", /effort: high/);
+  const statusReply = replies.at(-1) ?? "";
+  assert.match(statusReply, /模型：gpt-test/);
+  assert.match(statusReply, /思考强度：高（high）/);
+  assert.match(statusReply, new RegExp(`工作目录：${tmpDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  assert.match(statusReply, /会话 ID：thread-status/);
+  assert.match(statusReply, /沙箱权限：工作区可写/);
+  assert.doesNotMatch(statusReply, /sender:|backend:|stream replies:/);
+});
+
+test("lists allowed workspaces and switches the active session by number", async (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-wx-work-command-"));
+  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  const workspaces = [
+    path.join(tmpDir, "one"),
+    path.join(tmpDir, "two"),
+    path.join(tmpDir, "three")
+  ];
+  const stateStore = new RuntimeStateStore(resolveStatePaths(path.join(tmpDir, "state")));
+  const replies: string[] = [];
+  const service = new BridgeService({
+    config: {
+      ...defaultConfig(tmpDir),
+      allowedSenderIds: ["alice@im.wechat"],
+      allowedWorkspaces: workspaces
+    },
+    stateStore,
+    weixin: {
+      async sendTyping() {},
+      async sendText(input: { text: string }) {
+        replies.push(input.text);
+        return { messageId: `text-${replies.length}` };
+      }
+    } as never,
+    runner: {
+      async run() {
+        return { raw: "", text: "不应执行" };
+      },
+      async stop() {}
+    } as never
+  });
+  const send = (id: string, text: string) => service.handleMessage({
+    id,
+    senderId: "alice@im.wechat",
+    contextToken: "ctx",
+    text,
+    raw: {}
+  });
+
+  await send("work-list", "/work");
+  assert.equal(replies.at(-1), [
+    "允许的工作目录：",
+    `1、${workspaces[0]}`,
+    `2、${workspaces[1]}`,
+    `3、${workspaces[2]}`
+  ].join("\n"));
+
+  await send("work-select", "/work 2");
+  assert.equal(stateStore.getWorkspace("alice@im.wechat"), path.resolve(workspaces[1]));
+  assert.equal(replies.at(-1), `已切换到工作目录：\n${path.resolve(workspaces[1])}`);
+
+  await send("work-out-of-range", "/work 4");
+  assert.equal(stateStore.getWorkspace("alice@im.wechat"), path.resolve(workspaces[1]));
+  assert.match(replies.at(-1) ?? "", /1、/);
+  assert.match(replies.at(-1) ?? "", /3、/);
+
+  await send("work-invalid", "/work a,b,c");
+  assert.match(replies.at(-1) ?? "", /^允许的工作目录：/);
 });
 
 test("sends local markdown images as native WeChat image messages", async (t) => {
@@ -536,8 +602,9 @@ test("lists and switches model and reasoning effort for the active WeChat sessio
   assert.equal(runs.at(-1)?.model, "gpt-fast");
   assert.equal(runs.at(-1)?.effort, "high");
   await send("status", "/status");
-  assert.match(replies.at(-1) ?? "", /model: gpt-fast/);
-  assert.match(replies.at(-1) ?? "", /effort: high/);
+  assert.match(replies.at(-1) ?? "", /模型：gpt-fast/);
+  assert.match(replies.at(-1) ?? "", /思考强度：高（high）/);
+  assert.match(replies.at(-1) ?? "", /会话 ID：thread-model/);
 
   const overriddenSession = stateStore.getActiveSession("alice@im.wechat")?.id;
   await send("new", "/new");

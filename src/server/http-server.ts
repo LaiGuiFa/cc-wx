@@ -30,7 +30,7 @@ const sessionPatchSchema = z.object({
 }).refine((value) => Object.keys(value).length > 0, "Session update is empty");
 const configSchema = z.object({
   defaultCwd: z.string().min(1),
-  allowedWorkspaces: z.array(z.string().min(1)).min(1),
+  allowedWorkspaces: z.array(z.string().min(1)).min(1).max(5),
   codexBackend: z.enum(["auto", "app-server", "exec"]),
   codexExecSandbox: z.enum(["read-only", "workspace-write", "danger-full-access"]).nullable().optional(),
   model: z.string().optional(),
@@ -52,6 +52,7 @@ export type LocalHttpServerOptions = {
   codexCheck?: () => Promise<{ ready: boolean; version?: string; error?: string }>;
   codexRuntimeCheck?: () => Promise<CodexRuntimeInfo>;
   codexModelsCheck?: () => Promise<CodexModelOption[]>;
+  codexModelsRefreshCheck?: () => Promise<CodexModelOption[]>;
 };
 
 export type LocalHttpServer = {
@@ -149,6 +150,16 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   }
   if (method === "GET" && url.pathname === "/api/sessions") {
     sendJson(response, 200, { sessions: context.accountManager.listSessions() });
+    return;
+  }
+  if (method === "POST" && url.pathname === "/api/codex-models/refresh") {
+    sendJson(response, 200, {
+      codexModels: await readCodexModels(context, true)
+    });
+    return;
+  }
+  if (method === "POST" && url.pathname === "/api/workspace-picker") {
+    sendJson(response, 200, { path: await pickWorkspaceDirectory() });
     return;
   }
   if (method === "POST" && url.pathname === "/api/logins") {
@@ -322,7 +333,10 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     const input = configSchema.parse(await readJsonBody(request));
     const current = loadConfig(context.paths);
     const defaultCwd = path.resolve(input.defaultCwd);
-    const allowedWorkspaces = [...new Set([...input.allowedWorkspaces.map((workspace) => path.resolve(workspace)), defaultCwd])];
+    const allowedWorkspaces = [
+      defaultCwd,
+      ...input.allowedWorkspaces.map((workspace) => path.resolve(workspace)).filter((workspace) => workspace !== defaultCwd)
+    ].slice(0, 5);
     saveConfig(context.paths, {
       ...current,
       ...input,
@@ -361,8 +375,37 @@ function readCodexRuntime(context: HandlerContext): Promise<CodexRuntimeInfo> {
   return (context.codexRuntimeCheck ?? (() => context.accountManager.getCodexRuntimeInfo()))();
 }
 
-function readCodexModels(context: HandlerContext): Promise<CodexModelOption[]> {
-  return (context.codexModelsCheck ?? (() => context.accountManager.getCodexModels()))();
+function readCodexModels(context: HandlerContext, forceRefresh = false): Promise<CodexModelOption[]> {
+  if (forceRefresh && context.codexModelsRefreshCheck) {
+    return context.codexModelsRefreshCheck();
+  }
+  return (context.codexModelsCheck ?? (() => context.accountManager.getCodexModels(forceRefresh)))();
+}
+
+async function pickWorkspaceDirectory(): Promise<string> {
+  try {
+    if (process.platform === "win32") {
+      const script = [
+        "Add-Type -AssemblyName System.Windows.Forms",
+        "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
+        "$dialog.Description = '选择工作目录'",
+        "$dialog.UseDescriptionForTitle = $true",
+        "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.SelectedPath) }"
+      ].join("; ");
+      const result = await execFileAsync("powershell.exe", ["-NoProfile", "-STA", "-Command", script], { windowsHide: true });
+      return result.stdout.trim();
+    }
+    if (process.platform === "darwin") {
+      const result = await execFileAsync("osascript", ["-e", "POSIX path of (choose folder with prompt \"选择工作目录\")"]);
+      return result.stdout.trim();
+    }
+    const result = await execFileAsync("zenity", ["--file-selection", "--directory", "--title=选择工作目录"]);
+    return result.stdout.trim();
+  } catch (error) {
+    const exitCode = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+    if (exitCode === 1) return "";
+    throw new Error("无法打开目录选择器，请确认系统支持图形目录选择");
+  }
 }
 
 function serveStatic(response: ServerResponse, pathname: string): void {
@@ -371,6 +414,7 @@ function serveStatic(response: ServerResponse, pathname: string): void {
     "/index.html": { name: "index.html", type: "text/html; charset=utf-8" },
     "/styles.css": { name: "styles.css", type: "text/css; charset=utf-8" },
     "/app.js": { name: "app.js", type: "text/javascript; charset=utf-8" },
+    "/assets/cc-wx-logo.png": { name: "assets/cc-wx-logo.png", type: "image/png" },
     "/vendor/lucide.min.js": { name: "vendor/lucide.min.js", type: "text/javascript; charset=utf-8" },
     "/vendor/marked.umd.js": { name: "vendor/marked.umd.js", type: "text/javascript; charset=utf-8" },
     "/vendor/purify.min.js": { name: "vendor/purify.min.js", type: "text/javascript; charset=utf-8" }
@@ -380,8 +424,16 @@ function serveStatic(response: ServerResponse, pathname: string): void {
     sendJson(response, 404, { error: "Not found" });
     return;
   }
-  const filePath = path.join(webRoot, asset.name);
-  if (!fs.existsSync(filePath)) {
+  const sourcePath = path.join(webRoot, asset.name);
+  const developmentFallbacks: Record<string, string> = {
+    "vendor/lucide.min.js": fileURLToPath(new URL("../../node_modules/lucide/dist/umd/lucide.min.js", import.meta.url)),
+    "vendor/marked.umd.js": fileURLToPath(new URL("../../node_modules/marked/lib/marked.umd.js", import.meta.url)),
+    "vendor/purify.min.js": fileURLToPath(new URL("../../node_modules/dompurify/dist/purify.min.js", import.meta.url))
+  };
+  const filePath = fs.existsSync(sourcePath)
+    ? sourcePath
+    : developmentFallbacks[asset.name];
+  if (!filePath || !fs.existsSync(filePath)) {
     sendJson(response, 503, { error: "Web assets are not built" });
     return;
   }

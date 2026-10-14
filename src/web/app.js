@@ -11,6 +11,7 @@ const state = {
   selectedSessionKey: "",
   sessionMessages: [],
   loadedSessionKey: "",
+  selectedWorkspace: "",
   loadingMessages: false,
   sendingMessage: false,
   savingSessionRuntime: false,
@@ -30,6 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
     accountsList: document.querySelector("#accountsList"),
     productVersion: document.querySelector("#productVersion"),
     sessionsList: document.querySelector("#sessionsList"),
+    sessionWorkspaceList: document.querySelector("#sessionWorkspaceList"),
     sessionAccountTabs: document.querySelector("#sessionAccountTabs"),
     sessionListCount: document.querySelector("#sessionListCount"),
     chatTitle: document.querySelector("#chatTitle"),
@@ -48,11 +50,9 @@ document.addEventListener("DOMContentLoaded", () => {
     sessionStreamInput: document.querySelector("#sessionStreamInput"),
     runningAccountMetric: document.querySelector("#runningAccountMetric"),
     sessionMetric: document.querySelector("#sessionMetric"),
-    workspaceMetric: document.querySelector("#workspaceMetric"),
     qrDialog: document.querySelector("#qrDialog"),
     qrFrame: document.querySelector("#qrFrame"),
     qrStatus: document.querySelector("#qrStatus"),
-    settingsVersionValue: document.querySelector("#settingsVersionValue"),
     accountDialog: document.querySelector("#accountDialog"),
     removeAccountDialog: document.querySelector("#removeAccountDialog"),
     sessionDialog: document.querySelector("#sessionDialog")
@@ -68,7 +68,12 @@ function bindEvents() {
   document.querySelector("#refreshQrButton").addEventListener("click", () => void beginLogin());
   document.querySelector("#refreshAccountsButton").addEventListener("click", () => void refreshData(true));
   document.querySelector("#newSessionButton").addEventListener("click", openNewSessionDialog);
+  document.querySelector("#sessionWorkspaceImportButton").addEventListener("click", () => void importSessionWorkspace());
+  document.querySelector("#refreshModelsButton").addEventListener("click", () => void refreshModelList());
   document.querySelector("#settingsForm").addEventListener("submit", (event) => void saveSettings(event));
+  document.querySelectorAll("[data-workspace-action]").forEach((button) => {
+    button.addEventListener("click", () => void handleWorkspaceAction(button.dataset.workspaceAction));
+  });
   document.querySelector("#modelInput").addEventListener("change", () => renderEffortOptions(""));
   els.sessionModelInput.addEventListener("change", () => void handleSessionModelChange());
   els.sessionEffortInput.addEventListener("change", () => void saveSessionRuntimeSettings());
@@ -86,6 +91,7 @@ function bindEvents() {
   els.refreshMessagesButton.addEventListener("click", () => void loadSelectedSessionMessages());
   els.accountsList.addEventListener("click", (event) => void handleAccountAction(event));
   els.sessionsList.addEventListener("click", (event) => void handleSessionAction(event));
+  els.sessionWorkspaceList.addEventListener("click", handleSessionWorkspaceClick);
   els.sessionAccountTabs.addEventListener("click", handleSessionAccountTab);
   els.qrDialog.addEventListener("close", stopLoginPoll);
   window.addEventListener("hashchange", () => showView(location.hash.slice(1) || "accounts", false));
@@ -161,16 +167,15 @@ function renderAll() {
 
 function renderProductVersion() {
   const version = state.version.trim();
-  els.productVersion.hidden = !version;
-  els.productVersion.textContent = version ? `v${version.replace(/^v/i, "")}` : "";
-  els.settingsVersionValue.textContent = version ? `v${version.replace(/^v/i, "")}` : "--";
+  if (els.productVersion) {
+    els.productVersion.hidden = !version;
+    els.productVersion.textContent = version ? `v${version.replace(/^v/i, "")}` : "--";
+  }
 }
 
 function renderMetrics() {
   els.runningAccountMetric.textContent = String(state.accounts.filter((account) => account.status === "running").length);
   els.sessionMetric.textContent = String(state.sessions.length);
-  els.workspaceMetric.textContent = state.config?.defaultCwd || "--";
-  els.workspaceMetric.title = state.config?.defaultCwd || "";
   const serviceText = document.querySelector("#serviceStateText");
   const serviceDot = document.querySelector("#serviceDot");
   if (state.codex?.ready) {
@@ -183,49 +188,50 @@ function renderMetrics() {
 }
 
 function renderAccounts() {
-  const expandedAccountIds = new Set(
-    [...els.accountsList.querySelectorAll(".account-identifiers[open]")]
-      .map((details) => details.dataset.accountId)
-      .filter(Boolean)
-  );
   if (!state.accounts.length) {
     els.accountsList.innerHTML = emptyState("scan-line", "还没有微信账号", "", `<button class="button button-primary" type="button" data-account-action="add"><i data-lucide="scan-line"></i><span>添加微信</span></button>`);
     drawIcons();
     return;
   }
-  els.accountsList.innerHTML = state.accounts.map((account) => {
+  const tableHead = `<div class="account-table-head" aria-hidden="true">
+    <span>账号</span>
+    <span>机器人 ID</span>
+    <span>用户 ID</span>
+    <span>状态</span>
+    <span>会话数</span>
+    <span>运行状态</span>
+    <span>操作</span>
+  </div>`;
+  els.accountsList.innerHTML = tableHead + state.accounts.map((account) => {
     const pendingSender = account.lastActiveSenderId && !account.pairedSenderIds.includes(account.lastActiveSenderId)
       ? account.lastActiveSenderId : "";
     const authorized = account.pairedSenderIds.length > 0;
     return `<article class="account-card">
       <div class="account-main">
         <div class="account-identity">
-          <span class="account-avatar"><i data-lucide="message-circle"></i></span>
           <div class="account-name">
             <strong>${escapeHtml(accountDisplayName(account.accountId))}</strong>
-            <div class="account-description">个人微信接入</div>
+            <div class="account-description">${escapeHtml(account.accountId)}</div>
           </div>
         </div>
-        <div class="account-stat"><span>状态</span><strong class="status-label status-${escapeAttr(account.status)}">${statusText(account.status)}</strong></div>
-        <div class="account-stat"><span>会话</span><strong>${account.sessionCount}</strong></div>
+        <div class="account-cell account-id-cell"><code title="${escapeAttr(account.botId || account.accountId)}">${escapeHtml(account.botId || account.accountId)}</code></div>
+        <div class="account-cell account-id-cell"><code title="${escapeAttr(account.userId || "未返回")}">${escapeHtml(account.userId || "未返回")}</code></div>
+        <div class="account-cell account-status-cell"><strong class="account-approval-status ${authorized ? "is-authorized" : pendingSender ? "is-pending" : "is-unauthorized"}">${authorized ? "已授权" : pendingSender ? "待授权" : "未授权"}</strong></div>
+        <div class="account-cell"><strong>${account.sessionCount}</strong></div>
+        <div class="account-cell"><strong class="status-label status-${escapeAttr(account.status)}">${statusText(account.status)}</strong></div>
         <div class="account-actions">
-          <button class="icon-button" type="button" data-account-action="rename" data-account-id="${escapeAttr(account.accountId)}" title="修改账号备注" aria-label="修改账号备注"><i data-lucide="pencil"></i></button>
-          <button class="icon-button" type="button" data-account-action="${account.status === "running" ? "stop" : "start"}" data-account-id="${escapeAttr(account.accountId)}" title="${account.status === "running" ? "停止账号" : "启动账号"}" aria-label="${account.status === "running" ? "停止账号" : "启动账号"}"><i data-lucide="${account.status === "running" ? "pause" : "play"}"></i></button>
-          <button class="icon-button is-danger" type="button" data-account-action="remove" data-account-id="${escapeAttr(account.accountId)}" title="移除账号" aria-label="移除账号"><i data-lucide="trash-2"></i></button>
+          <div class="account-action-buttons">
+            <button class="icon-button" type="button" data-account-action="rename" data-account-id="${escapeAttr(account.accountId)}" title="修改账号备注" aria-label="修改账号备注"><i data-lucide="pencil"></i></button>
+            <button class="icon-button" type="button" data-account-action="${account.status === "running" ? "stop" : "start"}" data-account-id="${escapeAttr(account.accountId)}" title="${account.status === "running" ? "停止账号" : "启动账号"}" aria-label="${account.status === "running" ? "停止账号" : "启动账号"}"><i data-lucide="${account.status === "running" ? "pause" : "play"}"></i></button>
+            <button class="icon-button is-danger" type="button" data-account-action="remove" data-account-id="${escapeAttr(account.accountId)}" title="删除账号" aria-label="删除账号"><i data-lucide="trash-2"></i></button>
+            ${authorized
+              ? `<button class="icon-button" type="button" data-account-action="revoke-all" data-account-id="${escapeAttr(account.accountId)}" title="撤销授权" aria-label="撤销授权"><i data-lucide="shield-x"></i></button>`
+              : pendingSender
+                ? `<button class="icon-button is-authorize" type="button" data-account-action="allow" data-account-id="${escapeAttr(account.accountId)}" data-sender-id="${escapeAttr(pendingSender)}" title="允许访问" aria-label="允许访问"><i data-lucide="user-check"></i></button>`
+                : ""}
+          </div>
         </div>
       </div>
-      <details class="account-identifiers" data-account-id="${escapeAttr(account.accountId)}"${expandedAccountIds.has(account.accountId) ? " open" : ""}>
-        <summary>
-          <span class="account-identifiers-title"><i data-lucide="fingerprint"></i><strong>账号 ID</strong><small>Bot ID 与 User ID</small></span>
-          <i class="account-identifiers-chevron" data-lucide="chevron-down"></i>
-        </summary>
-        <dl class="account-identifiers-grid">
-          <div><dt>Bot ID</dt><dd><code title="${escapeAttr(account.botId || account.accountId)}">${escapeHtml(account.botId || account.accountId)}</code></dd></div>
-          <div><dt>User ID</dt><dd><code title="${escapeAttr(account.userId || "未返回")}">${escapeHtml(account.userId || "未返回")}</code></dd></div>
-        </dl>
-      </details>
-      <div class="account-detail">${renderAuthorizationState(account, pendingSender)}</div>
-      ${authorized && pendingSender ? `<div class="pending-access"><div><strong>新的微信访问请求</strong><span>当前授权不受影响，可选择允许新的访问</span></div><button class="button button-secondary" type="button" data-account-action="allow" data-account-id="${escapeAttr(account.accountId)}" data-sender-id="${escapeAttr(pendingSender)}"><i data-lucide="user-check"></i><span>允许访问</span></button></div>` : ""}
       ${account.error ? `<div class="pending-access"><div><strong>账号运行错误</strong><span>${escapeHtml(account.error)}</span></div></div>` : ""}
     </article>`;
   }).join("");
@@ -257,6 +263,7 @@ function renderSessions() {
   if (!state.sessions.length) {
     els.sessionListCount.textContent = "0";
     els.sessionAccountTabs.innerHTML = "";
+    els.sessionWorkspaceList.innerHTML = "";
     els.sessionsList.innerHTML = emptyState("messages-square", "还没有受管会话", "", `<button class="button button-secondary" type="button" data-session-action="new"><i data-lucide="plus"></i><span>新建会话</span></button>`);
     state.selectedSessionKey = "";
     state.sessionMessages = [];
@@ -273,15 +280,33 @@ function renderSessions() {
     const selected = selectedSession();
     state.selectedAccountId = selected && accountIds.includes(selected.accountId) ? selected.accountId : accountIds[0];
   }
-  const visibleSessions = state.sessions.filter((session) => session.accountId === state.selectedAccountId);
+  const accountSessions = state.sessions.filter((session) => session.accountId === state.selectedAccountId);
+  const workspaces = [...new Set(accountSessions.map((session) => session.workspace))].sort((a, b) => a.localeCompare(b));
+  if (state.selectedWorkspace && !workspaces.includes(state.selectedWorkspace)) {
+    state.selectedWorkspace = "";
+  }
+  const visibleSessions = state.selectedWorkspace
+    ? accountSessions.filter((session) => session.workspace === state.selectedWorkspace)
+    : accountSessions;
   els.sessionListCount.textContent = String(visibleSessions.length);
   els.sessionAccountTabs.innerHTML = accountIds.map((accountId) => {
     const active = accountId === state.selectedAccountId;
     const count = state.sessions.filter((session) => session.accountId === accountId).length;
     return `<button class="session-account-tab${active ? " is-active" : ""}" type="button" data-session-account="${escapeAttr(accountId)}" aria-pressed="${active}"><i data-lucide="message-circle"></i><span>${escapeHtml(accountDisplayName(accountId))}</span><b>${count}</b></button>`;
   }).join("");
+  els.sessionWorkspaceList.innerHTML = [
+    `<button class="session-workspace-item${state.selectedWorkspace ? "" : " is-active"}" type="button" data-session-workspace="" aria-pressed="${state.selectedWorkspace ? "false" : "true"}"><i data-lucide="layers-3"></i><span>全部工作目录</span><b>${accountSessions.length}</b></button>`,
+    ...workspaces.map((workspace) => {
+      const active = workspace === state.selectedWorkspace;
+      return `<button class="session-workspace-item${active ? " is-active" : ""}" type="button" data-session-workspace="${escapeAttr(workspace)}" aria-pressed="${active}"><i data-lucide="folder"></i><span title="${escapeAttr(workspace)}">${escapeHtml(workspace)}</span><b>${accountSessions.filter((session) => session.workspace === workspace).length}</b></button>`;
+    })
+  ].join("");
   let shouldLoad = false;
-  if (!visibleSessions.some((session) => sessionKey(session) === state.selectedSessionKey)) {
+  if (!visibleSessions.length) {
+    state.selectedSessionKey = "";
+    state.sessionMessages = [];
+    state.loadedSessionKey = "";
+  } else if (!visibleSessions.some((session) => sessionKey(session) === state.selectedSessionKey)) {
     state.selectedSessionKey = sessionKey(visibleSessions[0]);
     state.sessionMessages = [];
     state.loadedSessionKey = "";
@@ -309,6 +334,17 @@ function renderSessions() {
   if (shouldLoad) void loadSelectedSessionMessages();
 }
 
+function handleSessionWorkspaceClick(event) {
+  const button = event.target.closest("[data-session-workspace]");
+  if (!button || button.dataset.sessionWorkspace === state.selectedWorkspace) return;
+  state.selectedWorkspace = button.dataset.sessionWorkspace || "";
+  state.selectedSessionKey = "";
+  state.sessionMessages = [];
+  state.loadedSessionKey = "";
+  resetComposer();
+  renderSessions();
+}
+
 function renderSettings() {
   if (!state.config) return;
   document.querySelector("#defaultCwdInput").value = state.config.defaultCwd || "";
@@ -321,6 +357,56 @@ function renderSettings() {
   document.querySelector("#effectiveEffortValue").textContent = state.codexRuntime?.effort || state.config.effort || "Codex 默认";
 }
 
+async function handleWorkspaceAction(action) {
+  if (action === "delete-default") {
+    document.querySelector("#defaultCwdInput").value = "";
+    return;
+  }
+  if (action === "delete-allowed") {
+    deleteAllowedWorkspace();
+    return;
+  }
+  if (action === "import-default") {
+    const path = await chooseWorkspaceDirectory();
+    if (path) document.querySelector("#defaultCwdInput").value = path;
+    return;
+  }
+  if (action === "import-allowed") {
+    const path = await chooseWorkspaceDirectory();
+    if (!path) return;
+    const input = document.querySelector("#allowedWorkspacesInput");
+    const workspaces = input.value.split("\n").map((line) => line.trim()).filter(Boolean);
+    if (workspaces.includes(path)) return;
+    if (workspaces.length >= 5) {
+      toast("允许的工作目录最多 5 个", true);
+      return;
+    }
+    input.value = [...workspaces, path].join("\n");
+  }
+}
+
+function deleteAllowedWorkspace() {
+  const input = document.querySelector("#allowedWorkspacesInput");
+  const workspaces = input.value.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (!workspaces.length) return;
+  const selected = workspaces.length === 1
+    ? 1
+    : Number(window.prompt(`输入要删除的目录编号：\n${workspaces.map((workspace, index) => `${index + 1}. ${workspace}`).join("\n")}`, "1"));
+  if (!Number.isInteger(selected) || selected < 1 || selected > workspaces.length) return;
+  workspaces.splice(selected - 1, 1);
+  input.value = workspaces.join("\n");
+}
+
+async function chooseWorkspaceDirectory() {
+  try {
+    const result = await api("/api/workspace-picker", { method: "POST", body: {} });
+    return typeof result.path === "string" ? result.path : "";
+  } catch (error) {
+    toast(error.message, true);
+    return "";
+  }
+}
+
 function renderModelOptions() {
   const select = document.querySelector("#modelInput");
   const configuredModel = state.config?.model || "";
@@ -328,7 +414,7 @@ function renderModelOptions() {
   const models = Array.isArray(state.codexModels) ? state.codexModels : [];
   const options = [{
     value: "",
-    label: effectiveModel ? `沿用 Codex 设置（当前：${effectiveModel}）` : "沿用 Codex 设置"
+    label: effectiveModel ? `Codex 默认（当前：${effectiveModel}）` : "Codex 默认"
   }, ...models.map((model) => ({
     value: model.model,
     label: model.displayName && model.displayName !== model.model
@@ -342,6 +428,23 @@ function renderModelOptions() {
   select.innerHTML = options.map((option) => `<option value="${escapeAttr(option.value)}"${option.title ? ` title="${escapeAttr(option.title)}"` : ""}>${escapeHtml(option.label)}</option>`).join("");
   select.value = configuredModel;
   renderEffortOptions(state.config?.effort || "");
+}
+
+async function refreshModelList() {
+  const button = document.querySelector("#refreshModelsButton");
+  try {
+    button.disabled = true;
+    const result = await api("/api/codex-models/refresh", { method: "POST", body: {} });
+    state.codexModels = Array.isArray(result.codexModels) ? result.codexModels : [];
+    renderModelOptions();
+    renderSessionRuntimeControls(selectedSession());
+    drawIcons();
+    toast(state.codexModels.length ? `已获取 ${state.codexModels.length} 个模型` : "未获取到可用模型", !state.codexModels.length);
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function renderEffortOptions(preferredEffort) {
@@ -358,8 +461,8 @@ function renderEffortOptions(preferredEffort) {
   }
   const inheritedEffort = state.codexRuntime?.effort || model?.defaultEffort;
   const inheritedLabel = inheritedEffort
-    ? `沿用 Codex 设置（当前：${effortInlineName(inheritedEffort)}）`
-    : "沿用 Codex 设置";
+    ? `Codex 默认（当前：${effortInlineName(inheritedEffort)}）`
+    : "Codex 默认";
   const select = document.querySelector("#effortInput");
   select.innerHTML = [
     `<option value="">${escapeHtml(inheritedLabel)}</option>`,
@@ -509,6 +612,7 @@ function handleSessionAccountTab(event) {
   const button = event.target.closest("[data-session-account]");
   if (!button || button.dataset.sessionAccount === state.selectedAccountId) return;
   state.selectedAccountId = button.dataset.sessionAccount;
+  state.selectedWorkspace = "";
   state.selectedSessionKey = "";
   state.sessionMessages = [];
   state.loadedSessionKey = "";
@@ -1054,7 +1158,11 @@ function openNewSessionDialog() {
   document.querySelector("#editingSessionId").value = "";
   document.querySelector("#editingAccountId").value = "";
   document.querySelector("#senderField").hidden = false;
+  document.querySelector("#sessionSenderInput").disabled = false;
+  document.querySelector("#senderReadonlyField").hidden = true;
   document.querySelector("#sessionWorkspaceField").hidden = false;
+  document.querySelector("#sessionWorkspaceInput").readOnly = true;
+  document.querySelector("#sessionWorkspaceImportButton").hidden = false;
   const senderInput = document.querySelector("#sessionSenderInput");
   senderInput.innerHTML = options.map(({ account, sender }) => `<option value="${escapeAttr(`${account.accountId}\n${sender}`)}">${escapeHtml(accountDisplayName(account.accountId))}</option>`).join("");
   const selectedOption = options.find(({ account }) => account.accountId === state.selectedAccountId) ?? options[0];
@@ -1077,10 +1185,37 @@ function openRenameSessionDialog(session) {
   document.querySelector("#editingSessionId").value = session.id;
   document.querySelector("#editingAccountId").value = session.accountId;
   document.querySelector("#senderField").hidden = true;
-  document.querySelector("#sessionWorkspaceField").hidden = true;
+  document.querySelector("#sessionSenderInput").disabled = true;
+  document.querySelector("#sessionWorkspaceField").hidden = false;
+  document.querySelector("#sessionWorkspaceInput").readOnly = true;
+  document.querySelector("#sessionWorkspaceInput").value = session.workspace;
+  document.querySelector("#sessionWorkspaceImportButton").hidden = true;
+  document.querySelector("#senderReadonlyField").hidden = false;
+  document.querySelector("#sessionSenderReadonlyInput").value = `${accountDisplayName(session.accountId)} · ${session.accountId}`;
   document.querySelector("#sessionTitleInput").value = session.title;
   els.sessionDialog.showModal();
   document.querySelector("#sessionTitleInput").select();
+}
+
+async function importSessionWorkspace() {
+  const workspace = await chooseWorkspaceDirectory();
+  if (!workspace) return;
+  const allowed = state.config?.allowedWorkspaces || [];
+  if (!allowed.some((root) => isWorkspaceWithin(workspace, root))) {
+    toast("导入的工作目录不在允许列表中", true);
+    return;
+  }
+  document.querySelector("#sessionWorkspaceInput").value = workspace;
+  document.querySelector("#sessionWorkspaceInput").readOnly = true;
+}
+
+function isWorkspaceWithin(workspace, root) {
+  if (root === "/" || root === "\\") return true;
+  const normalizedWorkspace = workspace.replace(/[\\/]+$/, "").toLowerCase();
+  const normalizedRoot = root.replace(/[\\/]+$/, "").toLowerCase();
+  return normalizedWorkspace === normalizedRoot
+    || normalizedWorkspace.startsWith(`${normalizedRoot}\\`)
+    || normalizedWorkspace.startsWith(`${normalizedRoot}/`);
 }
 
 async function saveSession(event) {
@@ -1136,7 +1271,7 @@ async function saveSettings(event) {
 }
 
 function showView(name, updateHash = true) {
-  const valid = ["accounts", "sessions", "settings"].includes(name) ? name : "accounts";
+  const valid = ["accounts", "sessions", "settings", "help"].includes(name) ? name : "accounts";
   document.querySelectorAll("[data-view-panel]").forEach((panel) => {
     const visible = panel.dataset.viewPanel === valid;
     panel.hidden = !visible;
@@ -1150,7 +1285,7 @@ function closeDialog(id) {
   document.querySelector(`#${CSS.escape(id)}`)?.close();
 }
 
-async function api(url, options = {}) {
+async function api(url, options = {}, retryInvalidToken = true) {
   const isFormData = options.body instanceof FormData;
   const headers = { ...(options.body && !isFormData ? { "Content-Type": "application/json" } : {}) };
   if (options.token !== false && state.requestToken) headers["X-Cc-Wx-Token"] = state.requestToken;
@@ -1160,6 +1295,11 @@ async function api(url, options = {}) {
     body: options.body ? (isFormData ? options.body : JSON.stringify(options.body)) : undefined
   });
   const data = await response.json().catch(() => ({}));
+  if (response.status === 403 && data.error === "Invalid request token" && options.token !== false && retryInvalidToken) {
+    const bootstrap = await api("/api/bootstrap", { token: false });
+    state.requestToken = bootstrap.requestToken;
+    return api(url, options, false);
+  }
   if (!response.ok) throw new Error(data.error || `请求失败 (${response.status})`);
   return data;
 }
