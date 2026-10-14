@@ -50,9 +50,12 @@ if ($processIds.Count -gt 0) {
 }
 
 $npmPath = (Get-Command npm.cmd -ErrorAction Stop).Source
+$escapedRoot = $projectRoot.Replace("'", "''")
+$escapedNpmPath = $npmPath.Replace("'", "''")
+$command = "Set-Location -LiteralPath '$escapedRoot'; & '$escapedNpmPath' run '$Mode'"
 Start-Process `
-  -FilePath $npmPath `
-  -ArgumentList @("run", $Mode) `
+  -FilePath "powershell.exe" `
+  -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-Command", $command) `
   -WorkingDirectory $projectRoot
 
 Write-Host "Started cc-wx with 'npm run $Mode'."
