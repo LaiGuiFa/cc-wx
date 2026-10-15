@@ -38,8 +38,8 @@
 /model                        查看或切换模型
 /effort                       查看或切换推理强度
 /stream                       查看或切换过程进度
-/prompt start                 开始缓冲多条消息
-/prompt done                 提交缓冲内容
+/start                        开始缓冲多条消息
+/end                          提交缓冲内容
 /stop                         中断当前任务
 ```
 

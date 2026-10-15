@@ -288,7 +288,7 @@ test("sends local markdown videos as native WeChat video messages", async (t) =>
   assert.equal(textReplies.some((reply) => reply.includes(markdownPath)), false);
 });
 
-test("buffers inbound image attachments and includes local paths in prompt done", async (t) => {
+test("buffers inbound image attachments and includes local paths in end", async (t) => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-wx-buffer-"));
   t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
   const key = crypto.randomBytes(16);
@@ -341,7 +341,7 @@ test("buffers inbound image attachments and includes local paths in prompt done"
     id: "start",
     senderId: "alice@im.wechat",
     contextToken: "ctx",
-    text: "/prompt start",
+    text: "/start",
     raw: {}
   });
 
@@ -374,7 +374,7 @@ test("buffers inbound image attachments and includes local paths in prompt done"
     id: "done",
     senderId: "alice@im.wechat",
     contextToken: "ctx",
-    text: "/prompt done",
+    text: "/end",
     raw: {}
   });
 
@@ -383,7 +383,7 @@ test("buffers inbound image attachments and includes local paths in prompt done"
   const savedPath = prompt.match(/saved to ([^\]]+)/)?.[1];
   assert.ok(savedPath);
   assert.deepEqual(fs.readFileSync(savedPath), plaintext);
-  assert.equal(textReplies.filter((reply) => reply === "Buffered. Send /prompt done when ready.").length, 2);
+  assert.equal(textReplies.filter((reply) => reply === "Buffered. Send /end when ready.").length, 2);
 });
 
 test("replies directly when a WeChat attachment exceeds 100 MiB", async (t) => {

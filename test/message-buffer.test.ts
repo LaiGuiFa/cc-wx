@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { PromptBuffer } from "../src/bridge/prompt-buffer.js";
 
-test("buffers mixed WeChat messages until prompt done", () => {
+test("buffers mixed WeChat messages until end", () => {
   const buffers = new PromptBuffer({ maxItems: 5, ttlMs: 60_000 });
 
   assert.equal(buffers.start("alice").status, "started");

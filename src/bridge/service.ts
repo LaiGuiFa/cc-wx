@@ -83,7 +83,7 @@ export class BridgeService {
       for (const item of items) {
         this.buffers.append(message.senderId, item);
       }
-      await this.reply(message.senderId, "Buffered. Send /prompt done when ready.");
+      await this.reply(message.senderId, "Buffered. Send /end when ready.");
       return;
     }
 
@@ -119,8 +119,11 @@ export class BridgeService {
       case "stream":
         await this.handleStreamCommand(message.senderId, command.arg);
         return;
-      case "prompt":
-        await this.handlePromptCommand(message.senderId, command.arg);
+      case "start":
+        await this.handlePromptCommand(message.senderId, command.arg ? `start ${command.arg}` : "start");
+        return;
+      case "end":
+        await this.handlePromptCommand(message.senderId, command.arg ? `done ${command.arg}` : "done");
         return;
       case "stop":
         const stopped = await this.runner.stop(this.options.stateStore.getThread(message.senderId));
@@ -225,7 +228,7 @@ export class BridgeService {
       await this.runCodexTurn({ id: "buffer", senderId, text: "", attachments: [], raw: {} }, "", flushed.items);
       return;
     }
-    await this.reply(senderId, "Usage: /prompt start or /prompt done");
+    await this.reply(senderId, "Usage: /start or /end");
   }
 
   private async handleModelCommand(senderId: string, arg: string): Promise<void> {
@@ -586,8 +589,8 @@ function helpText(): string {
     "/model [number|model-id|default] - view or switch this session's model",
     "/effort [number|level|default] - view or switch reasoning effort",
     "/stream [on|off|default] - view or switch streaming replies",
-    "/prompt start - buffer multiple WeChat messages",
-    "/prompt done - submit buffered prompt",
+    "/start - buffer multiple WeChat messages",
+    "/end - submit buffered prompt",
     "/stop - interrupt the current Codex task"
   ].join("\n");
 }

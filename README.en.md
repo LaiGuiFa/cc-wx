@@ -38,8 +38,8 @@ The service listens only on `127.0.0.1`. It is not a general messaging gateway a
 /model                        Show or switch the model
 /effort                       Show or switch reasoning effort
 /stream                       Show or switch process progress
-/prompt start                 Buffer multiple messages
-/prompt done                 Submit the buffered prompt
+/start                        Buffer multiple messages
+/end                          Submit the buffered prompt
 /stop                         Interrupt the current task
 ```
 
