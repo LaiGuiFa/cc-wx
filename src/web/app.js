@@ -16,7 +16,8 @@ const state = {
   sendingMessage: false,
   savingSessionRuntime: false,
   selectedAccountId: "",
-  chatFiles: []
+  chatFiles: [],
+  approvals: []
 };
 
 const MAX_CHAT_FILES = 10;
@@ -49,6 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
     sessionModelInput: document.querySelector("#sessionModelInput"),
     sessionEffortInput: document.querySelector("#sessionEffortInput"),
     sessionStreamInput: document.querySelector("#sessionStreamInput"),
+    approvalPanel: document.querySelector("#approvalPanel"),
     runningAccountMetric: document.querySelector("#runningAccountMetric"),
     sessionMetric: document.querySelector("#sessionMetric"),
     qrDialog: document.querySelector("#qrDialog"),
@@ -113,6 +115,8 @@ async function bootstrap() {
     renderAll();
     showView(location.hash.slice(1) || "accounts", false);
     window.setInterval(() => void refreshData(false), 5000);
+    window.setInterval(() => void refreshApprovals(), 1000);
+    void refreshApprovals();
   } catch (error) {
     toast(error.message, true);
     els.accountsList.innerHTML = emptyState("server-off", "无法连接本机服务", "请重新启动 cc-wx");
@@ -155,6 +159,59 @@ async function refreshDataImpl(notify) {
     if (notify) toast("状态已刷新");
   } catch (error) {
     if (notify) toast(error.message, true);
+  }
+}
+
+async function refreshApprovals() {
+  try {
+    const result = await api("/api/approvals");
+    state.approvals = result.approvals || [];
+    renderApprovals();
+  } catch {
+    // Approval polling is advisory; the active turn remains fail-closed.
+  }
+}
+
+function renderApprovals() {
+  if (!els.approvalPanel) return;
+  if (!state.approvals.length) {
+    els.approvalPanel.hidden = true;
+    els.approvalPanel.innerHTML = "";
+    return;
+  }
+  els.approvalPanel.hidden = false;
+  els.approvalPanel.innerHTML = state.approvals.map((approval) => `
+    <div class="approval-item">
+      <div class="approval-copy">
+        <strong>Codex 请求权限（${escapeHtml(approval.id)}）</strong>
+        <span>${escapeHtml(approval.kind === "command" ? "命令执行" : approval.kind === "file-change" ? "文件修改" : "额外权限")}${approval.command ? `：${escapeHtml(approval.command)}` : ""}</span>
+        ${approval.cwd ? `<small>${escapeHtml(approval.cwd)}</small>` : ""}
+        ${approval.reason ? `<small>原因：${escapeHtml(approval.reason)}</small>` : ""}
+        ${approval.permissions ? `<small>权限：${escapeHtml(JSON.stringify(approval.permissions))}</small>` : ""}
+        ${approval.accountId || approval.senderId || approval.sessionId
+          ? `<small>目标：${escapeHtml([approval.accountId, approval.senderId, approval.sessionId].filter(Boolean).join(" / "))}</small>`
+          : ""}
+      </div>
+      <div class="approval-actions">
+        <button class="button button-primary" type="button" data-approval-id="${escapeAttr(approval.id)}" data-approval-decision="accept">允许</button>
+        <button class="button button-secondary" type="button" data-approval-id="${escapeAttr(approval.id)}" data-approval-decision="decline">拒绝</button>
+      </div>
+    </div>
+  `).join("");
+  els.approvalPanel.querySelectorAll("[data-approval-id]").forEach((button) => {
+    button.addEventListener("click", () => void resolveApproval(button.dataset.approvalId, button.dataset.approvalDecision));
+  });
+}
+
+async function resolveApproval(id, decision) {
+  try {
+    await api(`/api/approvals/${encodeURIComponent(id)}`, {
+      method: "POST",
+      body: { decision }
+    });
+    await refreshApprovals();
+  } catch (error) {
+    toast(error.message, true);
   }
 }
 

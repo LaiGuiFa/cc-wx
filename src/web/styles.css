@@ -1004,6 +1004,52 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   color: currentColor;
 }
 
+.approval-panel {
+  margin: 12px 18px 0;
+  padding: 12px;
+  border: 1px solid #f0d7a5;
+  border-radius: 10px;
+  background: #fff8e9;
+}
+
+.approval-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.approval-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.approval-copy strong,
+.approval-copy span,
+.approval-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.approval-copy strong {
+  color: #7b4a08;
+  font-size: 12px;
+}
+
+.approval-copy span,
+.approval-copy small {
+  color: #956f35;
+  font-size: 11px;
+}
+
+.approval-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
 .sidebar-service {
   padding: 15px 8px 2px;
   color: #54708f;

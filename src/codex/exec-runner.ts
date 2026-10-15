@@ -17,30 +17,29 @@ export type BuildCodexExecArgsInput = {
 };
 
 export function buildCodexExecArgs(input: BuildCodexExecArgsInput): string[] {
+  const sandbox = input.sandbox ?? "workspace-write";
   const runtimeArgs = [
     ...(input.model ? ["--model", input.model] : []),
     ...(input.effort ? ["-c", `model_reasoning_effort=${JSON.stringify(input.effort)}`] : [])
   ];
   if (input.threadId) {
-    if (input.sandbox) {
-      return [
-        "exec",
-        "--skip-git-repo-check",
-        "--sandbox",
-        input.sandbox,
-        ...runtimeArgs,
-        "--json",
-        "resume",
-        input.threadId,
-        input.prompt
-      ];
-    }
-    return ["exec", "resume", "--skip-git-repo-check", ...runtimeArgs, "--json", input.threadId, input.prompt];
+    return [
+      "exec",
+      "--skip-git-repo-check",
+      "--sandbox",
+      sandbox,
+      ...runtimeArgs,
+      "--json",
+      "resume",
+      input.threadId,
+      input.prompt
+    ];
   }
   return [
     "exec",
     "--skip-git-repo-check",
-    ...(input.sandbox ? ["--sandbox", input.sandbox] : []),
+    "--sandbox",
+    sandbox,
     ...runtimeArgs,
     "--json",
     input.prompt

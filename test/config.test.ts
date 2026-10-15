@@ -62,3 +62,18 @@ test("rejects an invalid codex exec sandbox", (t) => {
     /Invalid codexExecSandbox/
   );
 });
+
+test("keeps the default workspace inside the allowlist and resolves workspace paths canonically", (t) => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-wx-config-workspace-"));
+  t.after(() => fs.rmSync(stateDir, { recursive: true, force: true }));
+  const paths = resolveStatePaths(stateDir);
+  const defaultCwd = path.join(stateDir, "default");
+  fs.mkdirSync(defaultCwd, { recursive: true });
+  fs.writeFileSync(paths.configPath, JSON.stringify({
+    defaultCwd,
+    allowedWorkspaces: [path.join(stateDir, "other")]
+  }));
+  const config = loadConfig(paths);
+  assert.equal(config.defaultCwd, fs.realpathSync.native(defaultCwd));
+  assert.equal(config.allowedWorkspaces[0], config.defaultCwd);
+});

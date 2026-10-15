@@ -98,6 +98,28 @@ test("uses the Codex V2 initialize, thread, and turn lifecycle", async (t) => {
   }]);
 });
 
+test("routes app-server approval requests to the caller and fails closed", async (t) => {
+  const runner = new AppServerCodexRunner({
+    codexBin: path.join(fixturesDir, "fake-codex-app-server.mjs"),
+    requestTimeoutMs: 2_000
+  });
+  t.after(() => runner.close());
+
+  const requests: Array<{ command?: string; reason?: string }> = [];
+  const result = await runner.run({
+    prompt: "approval",
+    cwd: "/tmp/project",
+    onApproval: async (request) => {
+      requests.push(request);
+      return "accept";
+    }
+  });
+  assert.equal(result.text, "");
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0]?.command, "dangerous-command");
+  assert.equal(requests[0]?.reason, "fixture approval");
+});
+
 test("interrupts the active V2 turn with both threadId and turnId", async (t) => {
   const runner = new AppServerCodexRunner({
     codexBin: path.join(fixturesDir, "fake-codex-app-server.mjs"),
@@ -178,4 +200,38 @@ test("streaming fallback to exec sends only the final answer", async (t) => {
   assert.deepEqual(deltas, []);
   assert.match(result.text, /used codex exec fallback/i);
   assert.match(result.text, /exec-new/);
+});
+
+test("does not fall back to exec when an approval handler is present", async (t) => {
+  const runner = new HybridCodexRunner({
+    backend: "auto",
+    codexBin: path.join(fixturesDir, "fake-codex-fallback.mjs"),
+    timeoutMs: 2_000
+  });
+  t.after(() => runner.close());
+
+  await assert.rejects(
+    runner.run({
+      prompt: "needs approval",
+      cwd: fixturesDir,
+      onApproval: async () => "accept"
+    }),
+    /app-server unavailable|exited with code/i
+  );
+});
+
+test("rejects danger-full-access without an approval handler", async () => {
+  const runner = new HybridCodexRunner({
+    backend: "exec",
+    execSandbox: "danger-full-access",
+    codexBin: path.join(fixturesDir, "fake-codex-fallback.mjs")
+  });
+  try {
+    await assert.rejects(
+      runner.run({ prompt: "unsafe", cwd: fixturesDir }),
+      /requires an approval handler/
+    );
+  } finally {
+    runner.close();
+  }
 });

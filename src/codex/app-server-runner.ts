@@ -4,6 +4,8 @@ import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { resolveCodexCommand, type CodexRunResult } from "./exec-runner.js";
+import type { ApprovalDecision, ApprovalRequest } from "./approval.js";
+import type { CodexExecSandbox } from "./sandbox.js";
 
 const CLIENT_VERSION = readPackageVersion();
 
@@ -39,6 +41,8 @@ export type CodexRunnerInput = {
   effort?: string;
   onDelta?: (delta: string) => Promise<void> | void;
   onProgress?: (message: string) => Promise<void> | void;
+  sandbox?: CodexExecSandbox;
+  onApproval?: (request: Omit<ApprovalRequest, "id" | "createdAt">) => Promise<ApprovalDecision>;
 };
 
 export type CodexHistoryMessage = {
@@ -92,6 +96,7 @@ type TurnWaiter = {
 type TurnStream = {
   onDelta?: (delta: string) => Promise<void> | void;
   onProgress?: (message: string) => Promise<void> | void;
+  onApproval?: CodexRunnerInput["onApproval"];
   chain: Promise<void>;
 };
 
@@ -128,6 +133,7 @@ export class AppServerCodexRunner {
   private readonly completedTurns = new Map<string, TurnCompletion>();
   private readonly turnStreams = new Map<string, TurnStream>();
   private readonly queuedTurnEvents = new Map<string, QueuedTurnEvent[]>();
+  private readonly approvalHandlersByThread = new Map<string, CodexRunnerInput["onApproval"]>();
   private readonly itemPhasesByTurn = new Map<string, Map<string, string>>();
   private readonly runtimeInfoByThread = new Map<string, CodexRuntimeInfo>();
   private modelOptions?: CodexModelOption[];
@@ -143,7 +149,8 @@ export class AppServerCodexRunner {
         ...(input.threadId ? { threadId: input.threadId } : {}),
         cwd: input.cwd,
         model: input.model,
-        approvalPolicy: "never"
+        approvalPolicy: approvalPolicyFor(input.sandbox),
+        sandboxPolicy: sandboxPolicyFor(input.sandbox, input.cwd)
       })
     ) as Record<string, unknown>;
     const thread = threadResponse.thread as Record<string, unknown> | undefined;
@@ -160,11 +167,13 @@ export class AppServerCodexRunner {
 
     let turnResponse: Record<string, unknown>;
     try {
+      this.approvalHandlersByThread.set(threadId, input.onApproval);
       turnResponse = await this.request("turn/start", compactObject({
         threadId,
         input: [{ type: "text", text: input.prompt, text_elements: [] }],
         cwd: input.cwd,
-        approvalPolicy: "never",
+        approvalPolicy: approvalPolicyFor(input.sandbox),
+        sandboxPolicy: sandboxPolicyFor(input.sandbox, input.cwd),
         model: input.model,
         effort: input.effort
       })) as Record<string, unknown>;
@@ -178,11 +187,12 @@ export class AppServerCodexRunner {
     }
 
     this.activeTurns.set(threadId, turnId);
-    if (input.onDelta || input.onProgress) {
+    if (input.onDelta || input.onProgress || input.onApproval) {
       const key = turnKey(threadId, turnId);
       this.turnStreams.set(key, {
         onDelta: input.onDelta,
         onProgress: input.onProgress,
+        onApproval: input.onApproval,
         chain: Promise.resolve()
       });
       for (const event of this.queuedTurnEvents.get(key) ?? []) {
@@ -524,6 +534,7 @@ export class AppServerCodexRunner {
     this.turnTexts.delete(key);
     this.queuedTurnEvents.delete(key);
     this.itemPhasesByTurn.delete(key);
+    this.approvalHandlersByThread.delete(threadId);
     if (completion.status === "completed") {
       resolve({ text: completion.text, threadId, raw: completion.raw });
       return;
@@ -560,16 +571,51 @@ export class AppServerCodexRunner {
       });
   }
 
-  private handleServerRequest(message: WireMessage): void {
+  private async handleServerRequest(message: WireMessage): Promise<void> {
     const id = message.id as JsonRpcId;
+    const params = message.params ?? {};
+    const threadId = typeof params.threadId === "string" ? params.threadId : "";
+    const turnId = typeof params.turnId === "string" ? params.turnId : "";
+    const onApproval = this.turnStreams.get(turnKey(
+      threadId,
+      turnId
+    ))?.onApproval ?? this.approvalHandlersByThread.get(threadId);
     switch (message.method) {
       case "item/commandExecution/requestApproval":
+        this.send({ id, result: { decision: await this.askApproval(onApproval, {
+          kind: "command",
+          command: typeof params.command === "string" ? params.command : undefined,
+          cwd: typeof params.cwd === "string" ? params.cwd : undefined,
+          reason: typeof params.reason === "string" ? params.reason : undefined,
+          threadId: typeof params.threadId === "string" ? params.threadId : undefined,
+          turnId: typeof params.turnId === "string" ? params.turnId : undefined
+        }) } });
+        return;
       case "item/fileChange/requestApproval":
-        this.send({ id, result: { decision: "decline" } });
+        this.send({ id, result: { decision: await this.askApproval(onApproval, {
+          kind: "file-change",
+          reason: typeof params.reason === "string" ? params.reason : undefined,
+          threadId: typeof params.threadId === "string" ? params.threadId : undefined,
+          turnId: typeof params.turnId === "string" ? params.turnId : undefined
+        }) } });
         return;
       case "execCommandApproval":
+        this.send({ id, result: { decision: await this.askApproval(onApproval, {
+          kind: "command",
+          command: typeof params.command === "string" ? params.command : undefined,
+          cwd: typeof params.cwd === "string" ? params.cwd : undefined,
+          reason: typeof params.reason === "string" ? params.reason : undefined,
+          threadId: typeof params.threadId === "string" ? params.threadId : undefined,
+          turnId: typeof params.turnId === "string" ? params.turnId : undefined
+        }) } });
+        return;
       case "applyPatchApproval":
-        this.send({ id, result: { decision: "denied" } });
+        this.send({ id, result: { decision: await this.askApproval(onApproval, {
+          kind: "file-change",
+          reason: typeof params.reason === "string" ? params.reason : undefined,
+          threadId: typeof params.threadId === "string" ? params.threadId : undefined,
+          turnId: typeof params.turnId === "string" ? params.turnId : undefined
+        }) } });
         return;
       case "item/tool/requestUserInput":
         this.send({ id, result: { answers: {} } });
@@ -577,9 +623,27 @@ export class AppServerCodexRunner {
       case "mcpServer/elicitation/request":
         this.send({ id, result: { action: "cancel", content: null, _meta: null } });
         return;
-      case "item/permissions/requestApproval":
-        this.send({ id, result: { permissions: {}, scope: "turn" } });
+      case "item/permissions/requestApproval": {
+        const decision = await this.askApproval(onApproval, {
+          kind: "permissions",
+          cwd: typeof params.cwd === "string" ? params.cwd : undefined,
+          reason: typeof params.reason === "string" ? params.reason : undefined,
+          permissions: params.permissions,
+          threadId: typeof params.threadId === "string" ? params.threadId : undefined,
+          turnId: typeof params.turnId === "string" ? params.turnId : undefined
+        });
+        this.send({
+          id,
+          result: {
+            permissions: decision === "accept" && params.permissions && typeof params.permissions === "object"
+              ? params.permissions
+              : {},
+            scope: "turn",
+            strictAutoReview: true
+          }
+        });
         return;
+      }
       case "item/tool/call":
         this.send({
           id,
@@ -597,6 +661,18 @@ export class AppServerCodexRunner {
           id,
           error: { code: -32601, message: `Unsupported app-server request: ${message.method ?? "unknown"}` }
         });
+    }
+  }
+
+  private async askApproval(
+    onApproval: CodexRunnerInput["onApproval"],
+    request: Omit<ApprovalRequest, "id" | "createdAt">
+  ): Promise<"accept" | "decline" | "cancel"> {
+    if (!onApproval) return "cancel";
+    try {
+      return await onApproval(request);
+    } catch {
+      return "cancel";
     }
   }
 
@@ -701,6 +777,22 @@ function compactRuntimeInfo(input: { model?: unknown; effort?: unknown; provider
 
 function compactObject(input: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+}
+
+function approvalPolicyFor(_sandbox?: CodexExecSandbox): "on-request" {
+  return "on-request";
+}
+
+function sandboxPolicyFor(sandbox: CodexExecSandbox | undefined, cwd: string): Record<string, unknown> {
+  switch (sandbox ?? "workspace-write") {
+    case "read-only":
+      return { type: "readOnly", networkAccess: false };
+    case "danger-full-access":
+      return { type: "dangerFullAccess" };
+    case "workspace-write":
+    default:
+      return { type: "workspaceWrite", writableRoots: [cwd], networkAccess: false };
+  }
 }
 
 function turnKey(threadId: string, turnId: string): string {

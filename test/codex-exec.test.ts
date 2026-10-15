@@ -14,15 +14,15 @@ import {
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
-test("builds codex exec arguments without an explicit sandbox", () => {
+test("builds codex exec arguments with the default workspace sandbox", () => {
   assert.deepEqual(
     buildCodexExecArgs({ prompt: "hello", cwd: "/tmp/project" }),
-    ["exec", "--skip-git-repo-check", "--json", "hello"]
+    ["exec", "--skip-git-repo-check", "--sandbox", "workspace-write", "--json", "hello"]
   );
 
   assert.deepEqual(
     buildCodexExecArgs({ prompt: "hello", cwd: "/tmp/project", threadId: "abc" }),
-    ["exec", "resume", "--skip-git-repo-check", "--json", "abc", "hello"]
+    ["exec", "--skip-git-repo-check", "--sandbox", "workspace-write", "--json", "resume", "abc", "hello"]
   );
 });
 
@@ -51,6 +51,8 @@ test("passes model and reasoning effort to new and resumed exec turns", () => {
     [
       "exec",
       "--skip-git-repo-check",
+      "--sandbox",
+      "workspace-write",
       "--model",
       "gpt-5.6-sol",
       "-c",

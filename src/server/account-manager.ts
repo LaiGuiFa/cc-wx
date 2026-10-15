@@ -10,6 +10,7 @@ import { SessionTurnCoordinator } from "../bridge/session-turn.js";
 import { userFacingMessageHandlingError } from "../bridge/errors.js";
 import type { CodexHistoryMessage, CodexModelOption, CodexRuntimeInfo } from "../codex/app-server-runner.js";
 import { HybridCodexRunner } from "../codex/runner.js";
+import { ApprovalBroker, type ApprovalDecision, type ApprovalRequest } from "../codex/approval.js";
 import { isWorkspaceAllowed, loadConfig, type CcWxConfig } from "../state/config.js";
 import { accountStatePaths, type StatePaths } from "../state/paths.js";
 import { RuntimeStateStore, type ManagedSession, type SessionRuntimeOverrides } from "../state/runtime-state.js";
@@ -113,6 +114,7 @@ export class AccountManager {
   private readonly accountTurnCoordinator = new SessionTurnCoordinator();
   private readonly accountRunners = new Map<string, HybridCodexRunner>();
   private utilityRunner?: HybridCodexRunner;
+  private readonly approvals = new ApprovalBroker();
 
   constructor(private readonly options: AccountManagerOptions) {
     this.configProvider = options.configProvider ?? (() => loadConfig(options.paths));
@@ -185,6 +187,7 @@ export class AccountManager {
       runner: this.runnerForAccount(account.accountId, config),
       accountId: account.accountId,
       accountTurnCoordinator: this.accountTurnCoordinator,
+      approvalBroker: this.approvals,
       turnCoordinator: this.turnCoordinator,
       listCodexModels: () => this.getCodexModels(),
       onTurnStatus: ({ sessionId, active }) => this.setSessionResponding(account.accountId, sessionId, active)
@@ -459,6 +462,9 @@ export class AccountManager {
       const run = async (): Promise<SessionChatResult> => {
         const currentSession = requireSession(store, session.id);
         const config = this.configProvider();
+        if (!isWorkspaceAllowed(currentSession.workspace, config.allowedWorkspaces)) {
+          throw new Error("Session workspace is no longer allowed by the current configuration");
+        }
         const attachments = this.saveSessionUploads(canonicalAccountId, currentSession.id, uploads);
         const promptPreview = buildPromptPreview(prompt, attachments);
         if (promptPreview) {
@@ -473,6 +479,13 @@ export class AccountManager {
           },
           model: currentSession.model ?? config.model,
           effort: currentSession.effort ?? config.effort,
+          sandbox: config.codexExecSandbox ?? "workspace-write",
+          onApproval: (request) => this.approvals.request({
+            ...request,
+            accountId: canonicalAccountId,
+            senderId: currentSession.senderId,
+            sessionId: currentSession.id
+          }),
           ...((currentSession.streamReplies ?? config.streamReplies) && onProgress
             ? { onProgress }
             : {})
@@ -506,6 +519,14 @@ export class AccountManager {
     } finally {
       this.setSessionResponding(canonicalAccountId, session.id, false);
     }
+  }
+
+  listApprovals(): ApprovalRequest[] {
+    return this.approvals.list();
+  }
+
+  resolveApproval(id: string, decision: ApprovalDecision): boolean {
+    return this.approvals.resolve(id, decision);
   }
 
   private saveSessionUploads(accountId: string, sessionId: string, uploads: SessionUpload[]): PromptBufferItem[] {
@@ -623,12 +644,14 @@ export class AccountManager {
   }
 
   private closeAccountRunner(accountId: string): void {
+    this.approvals.cancelWhere((request) => request.accountId === accountId);
     const runner = this.accountRunners.get(accountId);
     runner?.close();
     this.accountRunners.delete(accountId);
   }
 
   private closeRunners(): void {
+    this.approvals.cancelAll();
     for (const runner of this.accountRunners.values()) runner.close();
     this.accountRunners.clear();
     this.utilityRunner?.close();

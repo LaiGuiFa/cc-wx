@@ -64,8 +64,12 @@ rl.on("line", (line) => {
   }
 
   if (message.method === "thread/start") {
-    if (message.params?.approvalPolicy !== "never") {
-      fail(message.id, "approvalPolicy must be never");
+    if (message.params?.approvalPolicy !== "on-request") {
+      fail(message.id, "approvalPolicy must be on-request");
+      return;
+    }
+    if (!message.params?.sandboxPolicy?.type) {
+      fail(message.id, "sandboxPolicy is required");
       return;
     }
     respond(message.id, {
@@ -171,6 +175,20 @@ rl.on("line", (line) => {
     }
     activeTurns.set(message.params.threadId, turnId);
     respond(message.id, { turn: completedTurn(turnId, "inProgress") });
+    if (prompt === "approval") {
+      send({
+        id: 9001,
+        method: "item/commandExecution/requestApproval",
+        params: {
+          threadId: message.params.threadId,
+          turnId,
+          command: "dangerous-command",
+          cwd: message.params.cwd,
+          reason: "fixture approval"
+        }
+      });
+      return;
+    }
     if (prompt === "hold") {
       return;
     }
@@ -242,6 +260,25 @@ rl.on("line", (line) => {
       params: { threadId: message.params.threadId, turn: completedTurn(activeTurnId, "interrupted") }
     });
     activeTurns.delete(message.params.threadId);
+    return;
+  }
+
+  if (message.id === 9001) {
+    const threadId = [...activeTurns.keys()][0];
+    const turnId = activeTurns.get(threadId);
+    if (message.result?.decision !== "accept") {
+      send({
+        method: "turn/completed",
+        params: { threadId, turn: completedTurn(turnId, "failed", { message: "approval declined" }) }
+      });
+      activeTurns.delete(threadId);
+      return;
+    }
+    send({
+      method: "turn/completed",
+      params: { threadId, turn: completedTurn(turnId, "completed") }
+    });
+    activeTurns.delete(threadId);
     return;
   }
 

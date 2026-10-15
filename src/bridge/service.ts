@@ -7,8 +7,9 @@ import { PromptBuffer } from "./prompt-buffer.js";
 import { SessionTurnCoordinator } from "./session-turn.js";
 import type { CodexModelOption, CodexRuntimeInfo } from "../codex/app-server-runner.js";
 import { HybridCodexRunner } from "../codex/runner.js";
+import { ApprovalBroker, type ApprovalDecision, type ApprovalRequest } from "../codex/approval.js";
 import type { CodexExecSandbox } from "../codex/sandbox.js";
-import type { CcWxConfig } from "../state/config.js";
+import { isWorkspaceAllowed, type CcWxConfig } from "../state/config.js";
 import { RuntimeStateStore, type ManagedSession } from "../state/runtime-state.js";
 import { WeixinApiClient, isStaleContextError, type FetchLike } from "../weixin/api.js";
 import {
@@ -34,12 +35,14 @@ export type BridgeServiceOptions = {
   turnCoordinator?: SessionTurnCoordinator;
   accountId?: string;
   accountTurnCoordinator?: SessionTurnCoordinator;
+  approvalBroker?: ApprovalBroker;
 };
 
 export class BridgeService {
   private readonly access: AccessController;
   private readonly buffers: PromptBuffer;
   private readonly runner: HybridCodexRunner;
+  private readonly approvals: ApprovalBroker;
 
   constructor(private readonly options: BridgeServiceOptions) {
     this.access = new AccessController({
@@ -55,6 +58,7 @@ export class BridgeService {
       codexBin: options.config.codexBin,
       execSandbox: options.config.codexExecSandbox
     });
+    this.approvals = options.approvalBroker ?? new ApprovalBroker();
   }
 
   async handleMessage(message: NormalizedWeixinMessage): Promise<void> {
@@ -124,6 +128,10 @@ export class BridgeService {
         return;
       case "end":
         await this.handlePromptCommand(message.senderId, command.arg ? `done ${command.arg}` : "done");
+        return;
+      case "allow":
+      case "deny":
+        await this.handleApprovalCommand(message.senderId, command.name, command.arg);
         return;
       case "stop":
         const stopped = await this.runner.stop(this.options.stateStore.getThread(message.senderId));
@@ -229,6 +237,20 @@ export class BridgeService {
       return;
     }
     await this.reply(senderId, "Usage: /start or /end");
+  }
+
+  private async handleApprovalCommand(senderId: string, command: string, arg: string): Promise<void> {
+    const id = arg.trim().split(/\s+/)[0] ?? "";
+    if (!id) {
+      await this.reply(senderId, `用法：/${command} <审批编号>`);
+      return;
+    }
+    const resolved = this.approvals.resolve(
+      id,
+      command === "allow" ? "accept" : "decline",
+      (request) => request.senderId === senderId
+    );
+    await this.reply(senderId, resolved ? `审批 ${id.toUpperCase()} 已${command === "allow" ? "允许" : "拒绝"}。` : "审批编号不存在或已过期。");
   }
 
   private async handleModelCommand(senderId: string, arg: string): Promise<void> {
@@ -394,6 +416,9 @@ export class BridgeService {
         throw new Error(`Managed session not found: ${session.id}`);
       }
       const workspace = currentSession.workspace;
+      if (!isWorkspaceAllowed(workspace, this.options.config.allowedWorkspaces)) {
+        throw new Error("Session workspace is no longer allowed by the current configuration");
+      }
       const threadId = currentSession.threadId;
       const progressEnabled = currentSession.streamReplies ?? this.options.config.streamReplies;
       const sentProgress = new Set<string>();
@@ -410,6 +435,8 @@ export class BridgeService {
             },
             model: currentSession.model ?? this.options.config.model,
             effort: currentSession.effort ?? this.options.config.effort,
+            sandbox: this.options.config.codexExecSandbox ?? "workspace-write",
+            onApproval: (request) => this.requestApproval(message.senderId, currentSession.id, request),
             ...(progressEnabled ? {
               onProgress: async (progress: string) => {
                 const progressText = progress.trim();
@@ -454,6 +481,32 @@ export class BridgeService {
         await run();
       }
     }
+  }
+
+  private requestApproval(
+    senderId: string,
+    sessionId: string,
+    request: Omit<ApprovalRequest, "id" | "createdAt">
+  ): Promise<ApprovalDecision> {
+    return this.approvals.request({
+      ...request,
+      accountId: this.options.accountId,
+      senderId,
+      sessionId
+    }, async (created) => {
+      const details = [
+        `Codex 请求权限（${created.id}）`,
+        `类型：${approvalKindText(created.kind)}`,
+        created.command ? `命令：${created.command}` : "",
+        created.cwd ? `目录：${created.cwd}` : "",
+        created.reason ? `原因：${created.reason}` : "",
+        created.permissions ? `权限：${formatApprovalPermissions(created.permissions)}` : "",
+        "",
+        `发送 /allow ${created.id} 允许`,
+        `发送 /deny ${created.id} 拒绝`
+      ].filter(Boolean).join("\n");
+      await this.reply(senderId, details);
+    });
   }
 
   private async sendLocalMedia(senderId: string, action: { type: "image" | "file" | "video"; path: string }): Promise<void> {
@@ -591,6 +644,8 @@ function helpText(): string {
     "/stream [on|off|default] - view or switch streaming replies",
     "/start - buffer multiple WeChat messages",
     "/end - submit buffered prompt",
+    "/allow <id> - approve a pending Codex permission request",
+    "/deny <id> - reject a pending Codex permission request",
     "/stop - interrupt the current Codex task"
   ].join("\n");
 }
@@ -652,4 +707,21 @@ function formatSandboxPermission(sandbox?: CodexExecSandbox): string {
     "danger-full-access": "完整访问"
   };
   return sandbox ? labels[sandbox] : "Codex 默认";
+}
+
+function approvalKindText(kind: ApprovalRequest["kind"]): string {
+  return {
+    command: "命令执行",
+    "file-change": "文件修改",
+    permissions: "额外权限"
+  }[kind];
+}
+
+function formatApprovalPermissions(permissions: unknown): string {
+  try {
+    const text = JSON.stringify(permissions);
+    return text && text.length <= 500 ? text : "详情过长，请在 Web 管理页查看";
+  } catch {
+    return "无法解析权限详情";
+  }
 }

@@ -1,4 +1,5 @@
 import os from "node:os";
+import fs from "node:fs";
 import path from "node:path";
 
 import { parseCodexExecSandbox, type CodexExecSandbox } from "../codex/sandbox.js";
@@ -41,15 +42,21 @@ export function loadConfig(paths: StatePaths, cwd?: string): CcWxConfig {
   const base = cwd ? defaultConfig(cwd) : defaultConfig();
   const loaded = readJsonFile<Partial<CcWxConfig>>(paths.configPath, {});
   const codexExecSandbox = parseCodexExecSandbox(loaded.codexExecSandbox);
+  const defaultCwd = canonicalPath(typeof loaded.defaultCwd === "string" ? loaded.defaultCwd : base.defaultCwd);
+  const allowedWorkspaces = (loaded.allowedWorkspaces?.length ? loaded.allowedWorkspaces : base.allowedWorkspaces)
+    .map((workspace) => canonicalPath(workspace));
+  if (!isWorkspaceAllowed(defaultCwd, allowedWorkspaces)) {
+    allowedWorkspaces.unshift(defaultCwd);
+  }
   return {
     ...base,
     ...loaded,
+    defaultCwd,
     codexExecSandbox,
     streamReplies: typeof loaded.streamReplies === "boolean" ? loaded.streamReplies : base.streamReplies,
     maxInboundBytes: normalizeInboundBytes(loaded.maxInboundBytes, base.maxInboundBytes),
     allowedSenderIds: loaded.allowedSenderIds ?? base.allowedSenderIds,
-    allowedWorkspaces: (loaded.allowedWorkspaces?.length ? loaded.allowedWorkspaces : base.allowedWorkspaces)
-      .map((workspace) => path.resolve(workspace))
+    allowedWorkspaces: allowedWorkspaces.slice(0, 5)
   };
 }
 
@@ -68,10 +75,27 @@ function normalizeInboundBytes(value: unknown, fallback: number): number {
 }
 
 export function isWorkspaceAllowed(workspace: string, allowedWorkspaces: string[]): boolean {
-  const resolved = path.resolve(workspace);
+  const resolved = canonicalPath(workspace);
   return allowedWorkspaces.some((allowed) => {
-    const root = path.resolve(allowed);
+    const root = canonicalPath(allowed);
     const relative = path.relative(root, resolved);
     return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
   });
+}
+
+function canonicalPath(value: string): string {
+  const resolved = path.resolve(value);
+  let current = resolved;
+  const missingParts: string[] = [];
+  while (true) {
+    try {
+      const canonicalRoot = fs.realpathSync.native(current);
+      return path.join(canonicalRoot, ...missingParts.reverse());
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return resolved;
+      missingParts.push(path.basename(current));
+      current = parent;
+    }
+  }
 }

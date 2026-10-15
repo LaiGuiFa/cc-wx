@@ -154,6 +154,18 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     sendJson(response, 200, { sessions: context.accountManager.listSessions() });
     return;
   }
+  if (method === "GET" && url.pathname === "/api/approvals") {
+    sendJson(response, 200, { approvals: context.accountManager.listApprovals() });
+    return;
+  }
+  const approvalMatch = matchPath(url.pathname, "/api/approvals/:approvalId");
+  if (method === "POST" && approvalMatch) {
+    const body = z.object({ decision: z.enum(["accept", "decline", "cancel"]) }).parse(await readJsonBody(request));
+    const resolved = context.accountManager.resolveApproval(approvalMatch.approvalId, body.decision);
+    if (!resolved) throw new Error("Approval request not found or expired");
+    sendJson(response, 200, { ok: true });
+    return;
+  }
   if (method === "POST" && url.pathname === "/api/codex-models/refresh") {
     sendJson(response, 200, {
       codexModels: await readCodexModels(context, true)

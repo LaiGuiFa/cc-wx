@@ -395,7 +395,8 @@ test("replies directly when a WeChat attachment exceeds 100 MiB", async (t) => {
   const service = new BridgeService({
     config: {
       ...defaultConfig(tmpDir),
-      allowedSenderIds: ["alice@im.wechat"]
+      allowedSenderIds: ["alice@im.wechat"],
+      allowedWorkspaces: ["/work/one", "/work/two"]
     },
     stateStore,
     mediaFetch: async () => new Response(null, {
@@ -451,7 +452,8 @@ test("lists resumable sessions with unambiguous R codes and switches by code", a
   const service = new BridgeService({
     config: {
       ...defaultConfig(tmpDir),
-      allowedSenderIds: ["alice@im.wechat"]
+      allowedSenderIds: ["alice@im.wechat"],
+      allowedWorkspaces: ["/work/one", "/work/two"]
     },
     stateStore,
     weixin: {

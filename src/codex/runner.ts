@@ -44,14 +44,19 @@ export class HybridCodexRunner {
     if (this.closed) {
       throw new Error("Codex runner is closed");
     }
+    const effectiveSandbox = input.sandbox ?? this.options.execSandbox ?? "workspace-write";
+    if (effectiveSandbox === "danger-full-access" && !input.onApproval) {
+      throw new Error("danger-full-access requires an approval handler");
+    }
     const requiresAppServerForStreaming = Boolean(input.onDelta || input.onProgress);
-    if (this.options.backend === "exec" && !requiresAppServerForStreaming) {
+    const requiresApproval = Boolean(input.onApproval);
+    if (this.options.backend === "exec" && !requiresAppServerForStreaming && !requiresApproval) {
       return this.exec.run(input);
     }
     try {
       return await this.appServer.run(input);
     } catch (error) {
-      if (this.options.backend === "app-server" || !isSafeToFallback(error)) {
+      if (this.options.backend === "app-server" || requiresApproval || !isSafeToFallback(error)) {
         throw error;
       }
       if (this.closed) {
@@ -59,6 +64,7 @@ export class HybridCodexRunner {
       }
       const fallback = await this.exec.run({
         ...input,
+        sandbox: effectiveSandbox,
         onDelta: undefined,
         onProgress: undefined
       });
