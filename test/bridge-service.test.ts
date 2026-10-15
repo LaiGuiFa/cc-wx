@@ -445,6 +445,10 @@ test("lists resumable sessions with unambiguous R codes and switches by code", a
   const first = stateStore.createSession("alice@im.wechat", "/work/one", "更新修复");
   stateStore.setThread("alice@im.wechat", "thread-one");
   stateStore.setSessionPromptPreview(first.id, "修复 macOS 自动更新");
+  for (let index = 1; index <= 6; index += 1) {
+    stateStore.createSession("alice@im.wechat", "/work/two", `历史会话${index}`);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2));
   const second = stateStore.createSession("alice@im.wechat", "/work/two", "季度报告");
   stateStore.setThread("alice@im.wechat", "thread-two");
   const replies: string[] = [];
@@ -491,22 +495,19 @@ test("lists resumable sessions with unambiguous R codes and switches by code", a
     raw: {}
   });
 
-  const listedSessions = stateStore.listSessions()
-    .filter((session) => session.senderId === "alice@im.wechat");
-  const firstNumber = listedSessions.findIndex((session) => session.id === first.id) + 1;
-  const secondNumber = listedSessions.findIndex((session) => session.id === second.id) + 1;
-
   await send("resume-list", "/resume");
   const listReply = replies.at(-1) ?? "";
-  assert.match(listReply, new RegExp(`\\[R${secondNumber}\\] 【当前】季度报告`));
+  assert.match(listReply, /\[R1\] 【当前】季度报告/);
   assert.match(listReply, /最近内容：分析季度报告 文件：report\.pdf/);
-  assert.match(listReply, new RegExp(`\\[R${firstNumber}\\] 更新修复`));
-  assert.match(listReply, /修复 macOS 自动更新/);
+  assert.doesNotMatch(listReply, /更新修复|修复 macOS 自动更新/);
+  assert.doesNotMatch(listReply, /历史会话1/);
+  assert.equal((listReply.match(/^\[R\d+\]/gm) ?? []).length, 5);
   assert.match(listReply, /R1 是切换编号，“会话 6”等是会话名称/);
+  assert.match(listReply, new RegExp(`工作目录：${path.resolve("/work/two").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   assert.doesNotMatch(listReply, /thread-one|thread-two|private\/report/);
   assert.equal(stateStore.getSession(second.id)?.lastPromptPreview, "分析季度报告 文件：report.pdf");
 
-  await send("resume-bare-number", "/resume 2");
+  await send("resume-bare-number", "/resume 1");
   assert.equal(stateStore.getActiveSession("alice@im.wechat")?.id, second.id);
   assert.match(replies.at(-1) ?? "", /R 开头的切换编号/);
 
@@ -514,9 +515,18 @@ test("lists resumable sessions with unambiguous R codes and switches by code", a
   assert.equal(stateStore.getActiveSession("alice@im.wechat")?.id, second.id);
   assert.match(replies.at(-1) ?? "", /没有这个切换编号/);
 
-  await send("resume-first", `/resume r${firstNumber}`);
+  await send("switch-workspace", "/work 1");
+  await send("resume-list-one", "/resume");
+  const firstWorkspaceListReply = replies.at(-1) ?? "";
+  assert.match(firstWorkspaceListReply, /更新修复/);
+  assert.match(firstWorkspaceListReply, new RegExp(`工作目录：${path.resolve("/work/one").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+
+  const firstWorkspaceSessions = stateStore.listSessions()
+    .filter((session) => session.senderId === "alice@im.wechat" && path.resolve(session.workspace) === path.resolve("/work/one"));
+  const firstWorkspaceFirstNumber = firstWorkspaceSessions.findIndex((session) => session.id === first.id) + 1;
+  await send("resume-first", `/resume r${firstWorkspaceFirstNumber}`);
   assert.equal(stateStore.getActiveSession("alice@im.wechat")?.id, first.id);
-  assert.match(replies.at(-1) ?? "", new RegExp(`已通过 R${firstNumber} 切换到：更新修复`));
+  assert.match(replies.at(-1) ?? "", new RegExp(`已通过 R${firstWorkspaceFirstNumber} 切换到：更新修复`));
   assert.doesNotMatch(replies.at(-1) ?? "", /thread-one/);
 
   await send("continued-turn", "继续处理");

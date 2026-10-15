@@ -161,7 +161,11 @@ export class BridgeService {
   }
 
   private async handleResumeCommand(senderId: string, arg: string): Promise<void> {
-    const sessions = this.options.stateStore.listSessions().filter((session) => session.senderId === senderId);
+    const activeSession = this.options.stateStore.getActiveSession(senderId);
+    const workspace = path.resolve(activeSession?.workspace ?? this.options.config.defaultCwd);
+    const sessions = this.options.stateStore.listSessions()
+      .filter((session) => session.senderId === senderId && path.resolve(session.workspace) === workspace)
+      .slice(0, 5);
     const input = arg.trim();
     if (!input) {
       const activeId = this.options.stateStore.getActiveSession(senderId)?.id;
@@ -173,7 +177,11 @@ export class BridgeService {
           `   最近内容：${previews[index]}（${formatSessionTime(session.updatedAt)}）`
         );
       }
-      lines.push("", "发送 /resume R1 这类切换编号继续会话；R1 是切换编号，“会话 6”等是会话名称。");
+      lines.push(
+        "",
+        "发送 /resume R1 这类切换编号继续会话；R1 是切换编号，“会话 6”等是会话名称。",
+        `工作目录：${workspace}`
+      );
       for (const chunk of chunkText(lines.join("\n"))) {
         await this.reply(senderId, chunk);
       }

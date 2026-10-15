@@ -1656,11 +1656,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 
 .help-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, .9fr);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, .95fr) minmax(300px, .8fr);
   grid-template-areas:
-    "connection commands"
-    "overview commands"
-    "message commands";
+    "connection commands security"
+    "overview commands security"
+    "message commands security";
   align-items: start;
   gap: 14px;
 }
@@ -1668,6 +1668,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 .help-connection { grid-area: connection; }
 .help-overview { grid-area: overview; }
 .help-commands { grid-area: commands; }
+.help-security { grid-area: security; }
 .help-message { grid-area: message; }
 
 .help-section {
@@ -1676,6 +1677,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 5px 18px rgb(29 72 119 / 4%);
+}
+
+.help-security {
+  border: 2px solid #d92d20;
+  background: #fff8f7;
+  box-shadow: 0 6px 20px rgb(217 45 32 / 12%);
 }
 
 .help-section-heading {
@@ -1687,6 +1694,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 .help-section-heading h2 {
   color: #1d3558;
   font-size: 16px;
+}
+
+.help-security .help-section-heading h2 {
+  color: #c5221f;
 }
 
 .help-section-heading p {
@@ -1705,6 +1716,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   background: #eaf4ff;
   display: grid;
   place-items: center;
+}
+
+.help-security .help-section-icon {
+  color: #c5221f;
+  background: #ffe8e5;
 }
 
 .help-section-icon svg {
@@ -1842,6 +1858,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
       "connection"
       "overview"
       "commands"
+      "security"
       "message";
   }
 

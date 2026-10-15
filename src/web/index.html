@@ -338,8 +338,27 @@
             <div><dt><code>/stream</code></dt><dd>开启或关闭过程进度</dd></div>
             <div><dt><code>/start</code></dt><dd>开始缓冲多条消息</dd></div>
             <div><dt><code>/end</code></dt><dd>提交缓冲内容</dd></div>
+            <div><dt><code>/allow &lt;编号&gt;</code></dt><dd>允许指定的 Codex 审批请求</dd></div>
+            <div><dt><code>/deny &lt;编号&gt;</code></dt><dd>拒绝指定的 Codex 审批请求</dd></div>
             <div><dt><code>/stop</code></dt><dd>中断当前任务</dd></div>
           </dl>
+        </section>
+
+        <section class="help-section help-security">
+          <div class="help-section-heading">
+            <span class="help-section-icon"><i data-lucide="shield-check"></i></span>
+            <div>
+              <h2>沙箱与审批</h2>
+              <p>沙箱权限和审批是两套独立控制。</p>
+            </div>
+          </div>
+          <ul class="help-list">
+            <li><strong>只读</strong>：只能读取内容，不能直接修改工作区。</li>
+            <li><strong>工作区可写</strong>：可修改当前工作目录，默认不开放网络访问。</li>
+            <li><strong>完整访问</strong>：取消沙箱文件和网络限制，但仍需审批。</li>
+            <li>命令执行、文件修改或额外权限请求会在 Web 审批面板和微信中显示。</li>
+            <li>微信使用 <code>/allow 编号</code> 或 <code>/deny 编号</code> 处理；120 秒未处理会自动取消。</li>
+          </ul>
         </section>
 
         <section class="help-section help-message">
