@@ -56,17 +56,19 @@
         <button class="tab" type="button" data-view="help"><i data-lucide="book-open"></i><span>使用说明</span></button>
       </nav>
       <div class="sidebar-footer">
-        <dl class="sidebar-metrics" aria-label="运行概览">
-          <div><dt>运行账号</dt><dd id="runningAccountMetric">0</dd></div>
-          <div><dt>受管会话</dt><dd id="sessionMetric">0</dd></div>
-        </dl>
+        <div class="sidebar-metrics-card">
+          <dl class="sidebar-metrics" aria-label="运行概览">
+            <div><dt><span class="metric-active-dot" aria-hidden="true"></span>运行账号</dt><dd id="runningAccountMetric">0</dd></div>
+            <div><dt>受管会话</dt><dd id="sessionMetric">0</dd></div>
+          </dl>
+          <div class="sidebar-service">
+            <span class="pulse-dot" id="serviceDot"></span>
+            <span id="serviceStateText">正在检查 Codex</span>
+          </div>
+        </div>
         <div class="sidebar-product-version">
           <span>cc-wx</span>
           <strong id="productVersion" aria-label="cc-wx 版本">--</strong>
-        </div>
-        <div class="sidebar-service">
-          <span class="pulse-dot" id="serviceDot"></span>
-          <span id="serviceStateText">正在检查 Codex</span>
         </div>
       </div>
     </aside>
@@ -77,7 +79,7 @@
       <div class="section-heading">
         <div>
           <p class="eyebrow">WECHAT ACCOUNTS</p>
-          <h1>账号管理</h1>
+          <h1 class="page-title">账号管理 <span class="heading-count" id="accountCount">0</span></h1>
         </div>
         <button class="icon-button" id="refreshAccountsButton" type="button" title="刷新账号状态" aria-label="刷新账号状态">
           <i data-lucide="refresh-cw"></i>

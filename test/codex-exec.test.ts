@@ -112,6 +112,58 @@ test("resolves a Windows npm codex.cmd shim to the real Node entry point", () =>
   });
 });
 
+test("finds codex.exe on the Windows PATH before falling back to the command name", () => {
+  const pathCli = String.raw`C:\Users\THU\AppData\Local\OpenAI\Codex\bin\codex.exe`;
+
+  assert.deepEqual(resolveCodexCommand("codex", {
+    platform: "win32",
+    env: {
+      PATH: String.raw`C:\Users\THU\AppData\Local\OpenAI\Codex\bin`
+    },
+    existsSync: (candidate) => candidate === pathCli
+  }), {
+    command: pathCli,
+    argsPrefix: []
+  });
+});
+
+test("finds the globally installed npm Codex entry without CHAT_CODEX_BIN", () => {
+  const npmCli = String.raw`C:\Users\THU\AppData\Roaming\npm\node_modules\@openai\codex\bin\codex.js`;
+  const node = String.raw`C:\Program Files\nodejs\node.exe`;
+
+  assert.deepEqual(resolveCodexCommand("codex", {
+    platform: "win32",
+    env: {
+      APPDATA: String.raw`C:\Users\THU\AppData\Roaming`,
+      PATH: String.raw`C:\Users\THU\AppData\Roaming\npm`
+    },
+    execPath: node,
+    existsSync: (candidate) => candidate === npmCli
+  }), {
+    command: node,
+    argsPrefix: [npmCli]
+  });
+});
+
+test("finds the newest Windows Codex desktop installation outside PATH", () => {
+  const oldCli = String.raw`C:\Users\THU\AppData\Local\OpenAI\Codex\bin\old\codex.exe`;
+  const newCli = String.raw`C:\Users\THU\AppData\Local\OpenAI\Codex\bin\new\codex.exe`;
+
+  assert.deepEqual(resolveCodexCommand("codex", {
+    platform: "win32",
+    env: {
+      LOCALAPPDATA: String.raw`C:\Users\THU\AppData\Local`,
+      PATH: ""
+    },
+    readdirSync: () => ["old", "new"],
+    existsSync: (candidate) => candidate === oldCli || candidate === newCli,
+    statSync: (candidate) => ({ mtimeMs: candidate === newCli ? 2 : 1 })
+  }), {
+    command: newCli,
+    argsPrefix: []
+  });
+});
+
 test("finds the Codex CLI bundled with the macOS desktop app outside PATH", () => {
   const bundledCli = "/Applications/ChatGPT.app/Contents/Resources/codex";
 

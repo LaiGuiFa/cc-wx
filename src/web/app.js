@@ -29,6 +29,7 @@ const els = {};
 document.addEventListener("DOMContentLoaded", () => {
   Object.assign(els, {
     accountsList: document.querySelector("#accountsList"),
+    accountCount: document.querySelector("#accountCount"),
     productVersion: document.querySelector("#productVersion"),
     sessionsList: document.querySelector("#sessionsList"),
     sessionWorkspaceList: document.querySelector("#sessionWorkspaceList"),
@@ -175,6 +176,7 @@ function renderProductVersion() {
 }
 
 function renderMetrics() {
+  els.accountCount.textContent = String(state.accounts.length);
   els.runningAccountMetric.textContent = String(state.accounts.filter((account) => account.status === "running").length);
   els.sessionMetric.textContent = String(state.sessions.length);
   const serviceText = document.querySelector("#serviceStateText");
@@ -194,48 +196,68 @@ function renderAccounts() {
     drawIcons();
     return;
   }
-  const tableHead = `<div class="account-table-head" aria-hidden="true">
-    <span>账号</span>
-    <span>机器人 ID</span>
-    <span>用户 ID</span>
-    <span>状态</span>
-    <span>会话数</span>
-    <span>运行状态</span>
-    <span>操作</span>
-  </div>`;
-  els.accountsList.innerHTML = tableHead + state.accounts.map((account) => {
+  els.accountsList.innerHTML = state.accounts.map((account) => {
     const pendingSender = account.lastActiveSenderId && !account.pairedSenderIds.includes(account.lastActiveSenderId)
       ? account.lastActiveSenderId : "";
     const authorized = account.pairedSenderIds.length > 0;
+    const authorizationText = authorized ? "已授权" : pendingSender ? "待授权" : "未授权";
+    const authorizationClass = authorized ? "is-authorized" : pendingSender ? "is-pending" : "is-unauthorized";
+    const botId = account.botId || account.accountId;
+    const userId = account.userId || "";
     return `<article class="account-card">
       <div class="account-main">
         <div class="account-identity">
+          <span class="account-avatar" aria-hidden="true"><i data-lucide="bot"></i></span>
           <div class="account-name">
             <strong>${escapeHtml(accountDisplayName(account.accountId))}</strong>
             <div class="account-description">${escapeHtml(account.accountId)}</div>
           </div>
         </div>
-        <div class="account-cell account-id-cell"><code title="${escapeAttr(account.botId || account.accountId)}">${escapeHtml(account.botId || account.accountId)}</code></div>
-        <div class="account-cell account-id-cell"><code title="${escapeAttr(account.userId || "未返回")}">${escapeHtml(account.userId || "未返回")}</code></div>
-        <div class="account-cell account-status-cell"><strong class="account-approval-status ${authorized ? "is-authorized" : pendingSender ? "is-pending" : "is-unauthorized"}">${authorized ? "已授权" : pendingSender ? "待授权" : "未授权"}</strong></div>
-        <div class="account-cell"><strong>${account.sessionCount}</strong></div>
-        <div class="account-cell"><strong class="status-label status-${escapeAttr(account.status)}">${statusText(account.status)}</strong></div>
+        <div class="account-identifiers">
+          ${renderAccountIdentifier("机器人 ID", botId)}
+          ${renderAccountIdentifier("用户 ID", userId)}
+        </div>
+        <div class="account-status-stack">
+          <div class="account-status-item">
+            <span>授权状态</span>
+            <strong class="account-approval-status ${authorizationClass}">${authorizationText}</strong>
+          </div>
+          <div class="account-status-item">
+            <span>运行状态</span>
+            <strong class="status-label status-${escapeAttr(account.status)}">${statusText(account.status)}</strong>
+          </div>
+          <div class="account-status-item">
+            <span>会话数</span>
+            <strong class="account-session-count">${account.sessionCount}</strong>
+          </div>
+        </div>
         <div class="account-actions">
           <div class="account-action-buttons">
-            <button class="icon-button" type="button" data-account-action="rename" data-account-id="${escapeAttr(account.accountId)}" title="修改账号备注" aria-label="修改账号备注"><i data-lucide="pencil"></i></button>
-            <button class="icon-button" type="button" data-account-action="${account.status === "running" ? "stop" : "start"}" data-account-id="${escapeAttr(account.accountId)}" title="${account.status === "running" ? "停止账号" : "启动账号"}" aria-label="${account.status === "running" ? "停止账号" : "启动账号"}"><i data-lucide="${account.status === "running" ? "pause" : "play"}"></i></button>
-            <button class="icon-button is-danger" type="button" data-account-action="remove" data-account-id="${escapeAttr(account.accountId)}" title="删除账号" aria-label="删除账号"><i data-lucide="trash-2"></i></button>
+            <button class="icon-button is-primary" type="button" data-account-action="rename" data-account-id="${escapeAttr(account.accountId)}" title="修改账号备注" aria-label="修改账号备注"><i data-lucide="pencil"></i></button>
+            <button class="icon-button is-neutral" type="button" data-account-action="${account.status === "running" ? "stop" : "start"}" data-account-id="${escapeAttr(account.accountId)}" title="${account.status === "running" ? "停止账号" : "启动账号"}" aria-label="${account.status === "running" ? "停止账号" : "启动账号"}"><i data-lucide="${account.status === "running" ? "pause" : "play"}"></i></button>
             ${authorized
-              ? `<button class="icon-button" type="button" data-account-action="revoke-all" data-account-id="${escapeAttr(account.accountId)}" title="撤销授权" aria-label="撤销授权"><i data-lucide="shield-x"></i></button>`
+              ? `<button class="icon-button is-security" type="button" data-account-action="revoke-all" data-account-id="${escapeAttr(account.accountId)}" title="撤销授权" aria-label="撤销授权"><i data-lucide="shield-x"></i></button>`
               : pendingSender
                 ? `<button class="icon-button is-authorize" type="button" data-account-action="allow" data-account-id="${escapeAttr(account.accountId)}" data-sender-id="${escapeAttr(pendingSender)}" title="允许访问" aria-label="允许访问"><i data-lucide="user-check"></i></button>`
                 : ""}
+            <button class="icon-button is-danger" type="button" data-account-action="remove" data-account-id="${escapeAttr(account.accountId)}" title="删除账号" aria-label="删除账号"><i data-lucide="trash-2"></i></button>
           </div>
         </div>
       </div>
       ${account.error ? `<div class="pending-access"><div><strong>账号运行错误</strong><span>${escapeHtml(account.error)}</span></div></div>` : ""}
     </article>`;
   }).join("");
+}
+
+function renderAccountIdentifier(label, value) {
+  const displayValue = value || "未返回";
+  return `<div class="account-id-cell">
+    <span class="account-field-label">${label}</span>
+    <div class="account-id-value">
+      <code title="${escapeAttr(displayValue)}">${escapeHtml(shortId(displayValue))}</code>
+      ${value ? `<button class="account-copy-button" type="button" data-account-action="copy-id" data-copy-value="${escapeAttr(value)}" title="复制${label}" aria-label="复制${label}"><i data-lucide="copy"></i></button>` : ""}
+    </div>
+  </div>`;
 }
 
 function renderAuthorizationState(account, pendingSender) {
@@ -492,6 +514,15 @@ async function handleAccountAction(event) {
   if (!button) return;
   const action = button.dataset.accountAction;
   if (action === "add") return beginLogin();
+  if (action === "copy-id") {
+    try {
+      await copyText(button.dataset.copyValue || "");
+      toast("标识已复制");
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
   const accountId = button.dataset.accountId;
   const account = state.accounts.find((item) => item.accountId === accountId);
   if (action === "rename") {
@@ -520,6 +551,26 @@ async function handleAccountAction(event) {
     toast(error.message, true);
   } finally {
     button.disabled = false;
+  }
+}
+
+async function copyText(value) {
+  if (!value) throw new Error("没有可复制的标识");
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const input = document.createElement("textarea");
+  input.value = value;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.append(input);
+  input.select();
+  try {
+    if (!document.execCommand("copy")) throw new Error("复制失败，请手动选择标识");
+  } finally {
+    input.remove();
   }
 }
 

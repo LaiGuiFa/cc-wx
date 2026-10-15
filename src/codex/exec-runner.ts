@@ -223,6 +223,8 @@ export type ResolveCodexCommandOptions = {
   env?: NodeJS.ProcessEnv;
   execPath?: string;
   existsSync?: (target: string) => boolean;
+  readdirSync?: (target: string) => string[];
+  statSync?: (target: string) => { mtimeMs: number };
 };
 
 export function resolveCodexCommand(
@@ -237,6 +239,8 @@ export function resolveCodexCommand(
   const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
   const existsSync = options.existsSync ?? fs.existsSync;
+  const readdirSync = options.readdirSync ?? ((target) => fs.readdirSync(target, "utf8"));
+  const statSync = options.statSync ?? fs.statSync;
   if (platform === "darwin" && codexBin === "codex" && !commandExistsOnPath(codexBin, env, existsSync)) {
     const bundledCli = resolveMacDesktopCodex(env, existsSync);
     if (bundledCli) {
@@ -247,17 +251,93 @@ export function resolveCodexCommand(
     return { command: codexBin, argsPrefix: [] };
   }
 
-  const npmShim = env.CHAT_CODEX_BIN;
   const pathApi = platform === "win32" ? path.win32 : path;
-  const npmRoot = npmShim ? pathApi.dirname(npmShim) : "";
-  const bundledCli = npmRoot
-    ? pathApi.join(npmRoot, "node_modules", "@openai", "codex", "bin", "codex.js")
-    : "";
-  if (bundledCli && existsSync(bundledCli)) {
-    return { command: execPath, argsPrefix: [bundledCli] };
+  const npmCli = resolveWindowsNpmCli(codexBin, env, pathApi, existsSync);
+  if (npmCli) {
+    return { command: execPath, argsPrefix: [npmCli] };
+  }
+
+  const pathCommand = resolveWindowsPathCommand(codexBin, env, pathApi, existsSync);
+  if (pathCommand) {
+    return { command: pathCommand, argsPrefix: [] };
+  }
+
+  const desktopCommand = resolveWindowsDesktopCodex(env, pathApi, existsSync, readdirSync, statSync);
+  if (desktopCommand) {
+    return { command: desktopCommand, argsPrefix: [] };
   }
 
   return { command: codexBin, argsPrefix: [] };
+}
+
+function resolveWindowsNpmCli(
+  codexBin: string,
+  env: NodeJS.ProcessEnv,
+  pathApi: typeof path.win32,
+  existsSync: (target: string) => boolean
+): string | undefined {
+  const configuredShim = env.CHAT_CODEX_BIN
+    || (pathApi.isAbsolute(codexBin) && /\.(?:cmd|ps1)$/i.test(codexBin) ? codexBin : undefined);
+  const npmRoots = [
+    configuredShim ? pathApi.dirname(configuredShim) : undefined,
+    env.APPDATA ? pathApi.join(env.APPDATA, "npm") : undefined
+  ].filter((value): value is string => Boolean(value));
+
+  for (const npmRoot of npmRoots) {
+    const bundledCli = pathApi.join(npmRoot, "node_modules", "@openai", "codex", "bin", "codex.js");
+    if (existsSync(bundledCli)) return bundledCli;
+  }
+  return undefined;
+}
+
+function resolveWindowsPathCommand(
+  codexBin: string,
+  env: NodeJS.ProcessEnv,
+  pathApi: typeof path.win32,
+  existsSync: (target: string) => boolean
+): string | undefined {
+  const pathValue = env.Path ?? env.PATH ?? "";
+  const commandName = pathApi.basename(codexBin);
+  const extension = pathApi.extname(commandName).toLowerCase();
+  const names = extension
+    ? [commandName]
+    : [`${commandName}.exe`, `${commandName}.cmd`];
+
+  for (const directory of pathValue.split(pathApi.delimiter).filter(Boolean)) {
+    for (const name of names) {
+      const candidate = pathApi.join(directory, name);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return undefined;
+}
+
+function resolveWindowsDesktopCodex(
+  env: NodeJS.ProcessEnv,
+  pathApi: typeof path.win32,
+  existsSync: (target: string) => boolean,
+  readdirSync: (target: string) => string[],
+  statSync: (target: string) => { mtimeMs: number }
+): string | undefined {
+  if (!env.LOCALAPPDATA) return undefined;
+  const installRoot = pathApi.join(env.LOCALAPPDATA, "OpenAI", "Codex", "bin");
+  let versionDirectories: string[];
+  try {
+    versionDirectories = readdirSync(installRoot);
+  } catch {
+    return undefined;
+  }
+
+  return versionDirectories
+    .map((versionDirectory) => pathApi.join(installRoot, versionDirectory, "codex.exe"))
+    .filter((candidate) => existsSync(candidate))
+    .sort((left, right) => {
+      try {
+        return statSync(right).mtimeMs - statSync(left).mtimeMs;
+      } catch {
+        return 0;
+      }
+    })[0];
 }
 
 function commandExistsOnPath(

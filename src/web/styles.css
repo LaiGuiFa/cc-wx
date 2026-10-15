@@ -417,6 +417,393 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
+/* Account cards: keep long identifiers readable without widening the page. */
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.heading-count {
+  min-width: 26px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #cfe0f2;
+  border-radius: 999px;
+  color: #1767b4;
+  background: #eef6ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+#accountsView .account-list {
+  gap: 14px;
+  overflow: visible;
+}
+
+#accountsView .account-table-head {
+  display: none;
+}
+
+#accountsView .account-card {
+  min-width: 0;
+  border: 1px solid #dce6f1;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px -2px rgb(29 72 119 / 4%);
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+#accountsView .account-card:hover {
+  border-color: #c8d9ea;
+  box-shadow: 0 8px 24px -4px rgb(29 72 119 / 9%);
+  transform: translateY(-1px);
+}
+
+#accountsView .account-main {
+  min-height: 0;
+  padding: 20px 22px;
+  grid-template-columns: minmax(190px, 1.1fr) minmax(260px, 1.35fr) minmax(220px, .9fr) auto;
+  gap: 24px;
+}
+
+#accountsView .account-identity {
+  gap: 12px;
+}
+
+#accountsView .account-avatar {
+  width: 48px;
+  height: 48px;
+  flex-basis: 48px;
+  border: 1px solid #cde2f8;
+  border-radius: 14px;
+  color: #176fd1;
+  background: linear-gradient(145deg, #dff0ff, #f0f8ff);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 78%);
+}
+
+#accountsView .account-avatar svg {
+  width: 23px;
+  height: 23px;
+}
+
+#accountsView .account-name strong {
+  color: #1d3558;
+  font-size: 14px;
+}
+
+#accountsView .account-description {
+  max-width: 190px;
+  overflow: hidden;
+  color: #8495aa;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#accountsView .account-identifiers {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: grid;
+  gap: 10px;
+}
+
+#accountsView .account-id-cell {
+  min-width: 0;
+}
+
+#accountsView .account-field-label,
+#accountsView .account-status-item > span {
+  display: block;
+  color: #7890ab;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+#accountsView .account-field-label {
+  margin-bottom: 4px;
+}
+
+#accountsView .account-id-value {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#accountsView .account-id-value code {
+  min-width: 0;
+  overflow: hidden;
+  color: #385a80;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#accountsView .account-copy-button {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  padding: 0;
+  border: 1px solid #d8e5f2;
+  border-radius: 8px;
+  color: #5e7fa3;
+  background: #f7fbff;
+  display: inline-grid;
+  place-items: center;
+  transition: color .2s ease, border-color .2s ease, background-color .2s ease, transform .2s ease;
+}
+
+#accountsView .account-copy-button:hover {
+  color: #176fd1;
+  border-color: #b8d3ee;
+  background: #eef6ff;
+  transform: translateY(-1px);
+}
+
+#accountsView .account-copy-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+#accountsView .account-status-stack {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+#accountsView .account-status-item {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#accountsView .account-approval-status,
+#accountsView .status-label {
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+#accountsView .account-approval-status::before,
+#accountsView .status-label::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+#accountsView .account-approval-status.is-authorized {
+  color: #087239;
+  border-color: #b9e4c8;
+  background: #ecfaf1;
+}
+
+#accountsView .account-approval-status.is-authorized::before {
+  background: #18ae63;
+  animation: account-pulse 1.8s ease-in-out infinite;
+}
+
+#accountsView .account-approval-status.is-pending {
+  color: #9a5a08;
+  border-color: #f0d7a5;
+  background: #fff8e9;
+}
+
+#accountsView .account-approval-status.is-pending::before {
+  background: #d9921e;
+}
+
+#accountsView .account-approval-status.is-unauthorized {
+  color: #687d96;
+  border-color: #d8e1eb;
+  background: #f6f9fc;
+}
+
+#accountsView .status-label {
+  color: #637a95;
+  border-color: #d8e1eb;
+  background: #f6f9fc;
+}
+
+#accountsView .status-label.status-running {
+  color: #1767b4;
+  border-color: #c5dcf2;
+  background: #eef6ff;
+}
+
+#accountsView .status-label.status-running::before {
+  background: #2a85e8;
+}
+
+#accountsView .status-label.status-starting {
+  color: #9a5a08;
+  border-color: #f0d7a5;
+  background: #fff8e9;
+}
+
+#accountsView .status-label.status-starting::before {
+  background: #d9921e;
+}
+
+#accountsView .status-label.status-error {
+  color: #b53633;
+  border-color: #efc5c3;
+  background: #fff3f2;
+}
+
+#accountsView .status-label.status-error::before {
+  background: #d75450;
+}
+
+#accountsView .account-session-count {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #d8e5f2;
+  border-radius: 9px;
+  color: #1767b4;
+  background: #f4f9ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+#accountsView .account-actions {
+  justify-content: flex-end;
+}
+
+#accountsView .account-action-buttons {
+  width: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+#accountsView .account-action-buttons .icon-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  transition: color .2s ease, border-color .2s ease, background-color .2s ease, transform .2s ease;
+}
+
+#accountsView .account-action-buttons .icon-button:hover {
+  transform: translateY(-1px);
+}
+
+#accountsView .account-action-buttons .icon-button.is-primary {
+  color: #176fd1;
+  border-color: #c8ddf2;
+  background: #f2f8ff;
+}
+
+#accountsView .account-action-buttons .icon-button.is-primary:hover {
+  border-color: #a9cbe9;
+  background: #e7f3ff;
+}
+
+#accountsView .account-action-buttons .icon-button.is-neutral {
+  color: #687d96;
+  background: #fafcfe;
+}
+
+#accountsView .account-action-buttons .icon-button.is-security {
+  color: #5d7592;
+}
+
+#accountsView .account-action-buttons .icon-button.is-security:hover {
+  color: #1767b4;
+  border-color: #b9d2eb;
+  background: #eef6ff;
+}
+
+#accountsView .account-action-buttons .icon-button.is-authorize {
+  color: #087239;
+  border-color: #b9e4c8;
+  background: #f0fbf4;
+}
+
+#accountsView .account-action-buttons .icon-button.is-danger {
+  color: #687d96;
+}
+
+#accountsView .account-action-buttons .icon-button.is-danger:hover {
+  color: var(--red);
+  border-color: #e3aaa7;
+  background: var(--red-soft);
+}
+
+@keyframes account-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(24 174 99 / 0%); }
+  50% { box-shadow: 0 0 0 4px rgb(24 174 99 / 14%); }
+}
+
+@media (max-width: 1120px) {
+  #accountsView .account-main {
+    grid-template-columns: minmax(190px, 1fr) minmax(250px, 1.1fr) auto;
+  }
+
+  #accountsView .account-identifiers {
+    grid-column: 2;
+  }
+
+  #accountsView .account-status-stack {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  #accountsView .account-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 640px) {
+  #accountsView .account-main {
+    padding: 18px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+  }
+
+  #accountsView .account-identifiers,
+  #accountsView .account-status-stack,
+  #accountsView .account-actions {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  #accountsView .account-identifiers {
+    padding-top: 2px;
+  }
+
+  #accountsView .account-actions {
+    justify-content: flex-start;
+  }
+}
+
 /* Product shell: the existing view markup stays intact, while navigation and
    the account home are presented in the two-column layout from the reference. */
 .app-header {
@@ -580,7 +967,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   min-height: 42px;
   height: auto;
   padding: 0 13px;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #516987;
   display: flex;
   align-items: center;
@@ -588,6 +975,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   font-size: 13px;
   font-weight: 650;
   text-align: left;
+  transition: color .2s ease, background-color .2s ease, transform .2s ease, box-shadow .2s ease;
 }
 
 .app-sidebar .tab svg {
@@ -599,12 +987,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 .app-sidebar .tab:hover {
   color: #075fbd;
   background: #edf5ff;
+  transform: translateX(4px);
+}
+
+.app-sidebar .tab.is-active:hover {
+  transform: none;
 }
 
 .app-sidebar .tab.is-active {
   color: #fff;
-  background: #1677e8;
-  box-shadow: 0 7px 16px rgb(22 119 232 / 18%);
+  background: linear-gradient(135deg, #2b84e8, #176fd1);
+  box-shadow: 0 7px 16px rgb(22 119 232 / 14%);
 }
 
 .app-sidebar .tab.is-active svg {
@@ -623,15 +1016,24 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 
 .sidebar-footer {
   margin-top: auto;
-  border-top: 1px solid #e4ebf3;
+  padding-top: 18px;
+}
+
+.sidebar-metrics-card {
+  margin: 0 0 16px;
+  padding: 12px;
+  border: 1px solid #e1e9f2;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 76%);
+  box-shadow: 0 4px 18px rgb(29 72 119 / 4%);
 }
 
 .sidebar-metrics {
-  margin: 0 8px 50px;
-  padding-top: 15px;
+  margin: 0;
+  padding: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
 }
 
 .sidebar-metrics div {
@@ -643,6 +1045,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .sidebar-metrics dd {
@@ -654,8 +1059,24 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   font-variant-numeric: tabular-nums;
 }
 
+.metric-active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1bb56a;
+  box-shadow: 0 0 0 3px rgb(27 181 106 / 12%);
+  animation: account-pulse 1.8s ease-in-out infinite;
+}
+
+.sidebar-metrics-card .sidebar-service {
+  margin-top: 12px;
+  padding: 10px 0 0;
+  border-top: 1px solid #e7edf4;
+  display: flex;
+}
+
 .sidebar-product-version {
-  padding: 0 8px;
+  padding: 0 4px;
   color: #6f86a1;
   display: flex;
   align-items: center;
@@ -737,7 +1158,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 }
 
 #accountsView .account-list {
-  gap: 9px;
+  gap: 14px;
+  overflow: visible;
 }
 
 #accountsView {
@@ -748,44 +1170,37 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 }
 
 #accountsView .account-list {
-  overflow-x: auto;
+  overflow: visible;
 }
 
 #accountsView .account-table-head {
-  display: grid;
-  min-width: 1638px;
-  grid-template-columns: repeat(6, 200px) 400px;
-  gap: 0;
-  padding: 0 18px 9px;
-  color: #7890ab;
-  font-size: 16px;
-  font-weight: 700;
-  text-align: left;
+  display: none;
 }
 
 #accountsView .account-card {
-  min-width: 1638px;
+  min-width: 0;
   border-color: #dce6f1;
-  border-radius: 8px;
-  box-shadow: 0 5px 18px rgb(29 72 119 / 5%);
+  border-radius: 14px;
+  box-shadow: 0 4px 20px -2px rgb(29 72 119 / 4%);
 }
 
 #accountsView .account-main {
-  min-height: 84px;
-  padding: 14px 18px;
-  grid-template-columns: repeat(6, 200px) 400px;
-  gap: 0;
+  min-height: 0;
+  padding: 20px 22px;
+  grid-template-columns: minmax(190px, 1.1fr) minmax(260px, 1.35fr) minmax(220px, .9fr) auto;
+  gap: 24px;
   align-items: center;
   text-align: left;
 }
 
 #accountsView .account-avatar {
-  width: 40px;
-  height: 40px;
-  flex-basis: 40px;
-  border-radius: 50%;
-  color: #1677e8;
-  background: #e7f2ff;
+  width: 48px;
+  height: 48px;
+  flex-basis: 48px;
+  border: 1px solid #cde2f8;
+  border-radius: 14px;
+  color: #176fd1;
+  background: linear-gradient(145deg, #dff0ff, #f0f8ff);
 }
 
 #accountsView .account-description {
@@ -793,7 +1208,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 }
 
 #accountsView .account-identifiers {
-  background: #fbfdff;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: grid;
+  gap: 10px;
 }
 
 #accountsView .account-name {
@@ -808,6 +1228,43 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 #accountsView .account-description {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 10px;
+}
+
+#accountsView .account-field-label,
+#accountsView .account-status-item > span {
+  display: block;
+  color: #7890ab;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+#accountsView .account-field-label {
+  margin-bottom: 4px;
+}
+
+#accountsView .account-id-value {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#accountsView .account-copy-button {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  padding: 0;
+  border: 1px solid #d8e5f2;
+  border-radius: 8px;
+  color: #5e7fa3;
+  background: #f7fbff;
+  display: inline-grid;
+  place-items: center;
+}
+
+#accountsView .account-copy-button svg {
+  width: 14px;
+  height: 14px;
 }
 
 #accountsView .account-cell,
@@ -835,10 +1292,31 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   user-select: all;
 }
 
+#accountsView .account-status-stack {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+#accountsView .account-status-item {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 #accountsView .account-approval-status {
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
 #accountsView .account-approval-status::before {
@@ -851,6 +1329,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 
 #accountsView .account-approval-status.is-authorized {
   color: #0c9b56;
+  border-color: #b9e4c8;
+  background: #ecfaf1;
 }
 
 #accountsView .account-approval-status.is-authorized::before {
@@ -859,6 +1339,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 
 #accountsView .account-approval-status.is-pending {
   color: #b36b09;
+  border-color: #f0d7a5;
+  background: #fff8e9;
 }
 
 #accountsView .account-approval-status.is-pending::before {
@@ -867,14 +1349,71 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 
 #accountsView .account-approval-status.is-unauthorized {
   color: #72849a;
+  border-color: #d8e1eb;
+  background: #f6f9fc;
+}
+
+#accountsView .status-label {
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid #d8e1eb;
+  border-radius: 999px;
+  color: #637a95;
+  background: #f6f9fc;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+#accountsView .status-label.status-running {
+  color: #1767b4;
+  border-color: #c5dcf2;
+  background: #eef6ff;
+}
+
+#accountsView .status-label.status-error {
+  color: #b53633;
+  border-color: #efc5c3;
+  background: #fff3f2;
+}
+
+#accountsView .account-session-count {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #d8e5f2;
+  border-radius: 9px;
+  color: #1767b4;
+  background: #f4f9ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+#accountsView .account-actions {
+  justify-content: flex-end;
 }
 
 #accountsView .account-action-buttons {
   display: flex;
   gap: 7px;
-  width: 400px;
+  width: auto;
   justify-content: flex-start;
   text-align: left;
+  flex-wrap: wrap;
+}
+
+#accountsView .account-action-buttons .icon-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
 }
 
 #accountsView .account-action-buttons .icon-button.is-authorize {
@@ -1075,7 +1614,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   grid-template-areas:
     "connection commands"
     "overview commands"
-    "message message";
+    "message commands";
   align-items: start;
   gap: 14px;
 }
@@ -1281,7 +1820,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   }
 
   #accountsView .account-main {
-    grid-template-columns: minmax(170px, 1.15fr) minmax(85px, .6fr) minmax(80px, .5fr) minmax(145px, .9fr) minmax(145px, .9fr) auto;
+    grid-template-columns: minmax(190px, 1fr) minmax(250px, 1.1fr) auto;
   }
 
   #accountsView {
@@ -1291,7 +1830,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   }
 
   #accountsView .account-table-head {
-    grid-template-columns: minmax(170px, 1.15fr) minmax(85px, .6fr) minmax(80px, .5fr) minmax(145px, .9fr) minmax(145px, .9fr) auto;
+    display: none;
   }
 
   #accountsView .account-status-cell {
@@ -1413,9 +1952,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
 
   #accountsView .account-main {
     min-height: 0;
-    padding: 14px 16px;
+    padding: 18px;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 12px;
+    gap: 16px;
   }
 
   #accountsView {
@@ -1433,8 +1972,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--focus); outline:
   }
 
   #accountsView .account-actions {
-    grid-column: 2;
-    grid-row: 1;
+    grid-column: 1 / -1;
+    grid-row: auto;
+    justify-content: flex-start;
   }
 
   #accountsView .account-action-buttons {
