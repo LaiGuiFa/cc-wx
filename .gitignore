@@ -7,4 +7,5 @@ output/
 .env
 .cc-wx/
 *.log
+docs/*
 *.tsbuildinfo

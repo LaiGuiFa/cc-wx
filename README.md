@@ -1,10 +1,6 @@
 <h1 align="center">cc-wx</h1>
 
 <p align="center">
-  <strong>中文</strong> | <a href="./README.en.md">English</a>
-</p>
-
-<p align="center">
   <strong>把个人微信账号接入本机 OpenAI Codex。</strong>
 </p>
 
@@ -80,25 +76,8 @@ npm start
 
 服务默认监听 `http://127.0.0.1:8787`。设置 `CC_WX_OPEN=0` 可禁止自动打开浏览器；设置 `CC_WX_PORT` 可更换端口。重启时先停止旧进程，再使用原启动命令重新启动；运行中的账号和配置会从 `~/.cc-wx` 恢复。
 
-## 文件回传
-
-Codex 可在最终回复中声明发送本机文件：
-
-````text
-```cc-wx-actions
-{
-  "send": [
-    { "type": "image", "path": "/absolute/path/chart.png" },
-    { "type": "video", "path": "/absolute/path/demo.mp4" },
-    { "type": "file", "path": "/absolute/path/report.pdf" }
-  ]
-}
-```
-````
-
-只接受本机绝对路径；远程 URL 不会被上传。
-
 ## 本地数据与安全
+只接受本机绝对路径；远程 URL 不会被上传。
 
 服务状态和默认 Codex 工作目录位于：
 
@@ -111,7 +90,5 @@ Codex 可在最终回复中声明发送本机文件：
   config.json               Codex 和工作区配置
   logs/
 ```
-
-不要提交或分享该目录。服务拒绝非本机 Host 和 Origin，修改 API 需要页面令牌，微信凭据不会返回浏览器；`/work` 只能选择允许列表内的工作目录。
 
 服务始终只绑定 `127.0.0.1`。启用 `danger-full-access` 前，请确认能够接受 Codex 访问整机文件的风险；该设置仍不会关闭审批。
